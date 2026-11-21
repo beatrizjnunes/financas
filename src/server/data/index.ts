@@ -7,7 +7,7 @@ import type { Kind, Scope } from "@/lib/labels";
 import type { DuplicateCandidate } from "../import/duplicates";
 import { db, schema } from "../db";
 
-const { accounts, categories, transactions, users } = schema;
+const { accounts, budgets, categories, transactions, users } = schema;
 
 export async function myAccounts(userId: string) {
   return db.select().from(accounts).where(eq(accounts.ownerId, userId)).orderBy(asc(accounts.bank)).all();
@@ -232,6 +232,78 @@ export async function myCountedTransactions(userId: string) {
     .where(and(eq(transactions.ownerId, userId), counts()))
     .orderBy(asc(transactions.date))
     .all();
+}
+
+/** Últimos movimentos que contam, para o Resumo. */
+export async function myRecentTransactions(userId: string, limit = 6) {
+  return db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      description: transactions.description,
+      amountCents: transactions.amountCents,
+      categoryName: categories.name,
+      scope: transactions.scope,
+    })
+    .from(transactions)
+    .leftJoin(categories, eq(categories.id, transactions.categoryId))
+    .where(and(eq(transactions.ownerId, userId), counts()))
+    .orderBy(desc(transactions.date), desc(transactions.createdAt))
+    .limit(limit)
+    .all();
+}
+
+/** Saldo mais recente de cada conta do utilizador, tirado da última linha do extrato com saldo. */
+export async function myBalances(userId: string) {
+  const accs = await myAccounts(userId);
+  const out: { accountId: string; name: string; balanceCents: number; date: string }[] = [];
+  for (const a of accs) {
+    const row = await db
+      .select({ balanceCents: transactions.balanceCents, date: transactions.date })
+      .from(transactions)
+      .where(and(eq(transactions.ownerId, userId), eq(transactions.accountId, a.id), isNotNull(transactions.balanceCents)))
+      .orderBy(desc(transactions.date), desc(transactions.createdAt))
+      .limit(1)
+      .get();
+    if (row?.balanceCents != null) out.push({ accountId: a.id, name: a.name, balanceCents: row.balanceCents, date: row.date });
+  }
+  return out;
+}
+
+export async function myBudgets(userId: string): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ categoryId: budgets.categoryId, amountCents: budgets.amountCents })
+    .from(budgets)
+    .where(eq(budgets.userId, userId))
+    .all();
+  return new Map(rows.map((r) => [r.categoryId, r.amountCents]));
+}
+
+/** Define (ou apaga, com null/0) vários orçamentos do próprio utilizador. Ignora categorias inexistentes. */
+export async function setMyBudgets(userId: string, items: { categoryId: string; cents: number | null }[]) {
+  if (!items.length) return;
+  const valid = new Set(
+    (
+      await db
+        .select({ id: categories.id })
+        .from(categories)
+        .where(inArray(categories.id, items.map((i) => i.categoryId)))
+        .all()
+    ).map((c) => c.id),
+  );
+  const now = new Date().toISOString();
+  for (const i of items) {
+    if (!valid.has(i.categoryId)) continue;
+    if (!i.cents || i.cents <= 0) {
+      await db.delete(budgets).where(and(eq(budgets.userId, userId), eq(budgets.categoryId, i.categoryId))).run();
+    } else {
+      await db
+        .insert(budgets)
+        .values({ userId, categoryId: i.categoryId, amountCents: i.cents, updatedAt: now })
+        .onConflictDoUpdate({ target: [budgets.userId, budgets.categoryId], set: { amountCents: i.cents, updatedAt: now } })
+        .run();
+    }
+  }
 }
 
 export async function listPeople() {

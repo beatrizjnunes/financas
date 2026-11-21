@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
+  recurringExpenses,
+  projectMonth,
   cumulativeByDay,
   daysInMonth,
   insights,
@@ -17,7 +18,7 @@ import { formatEUR } from "@/lib/format";
 import { KIND_LABEL, KINDS } from "@/lib/labels";
 import { requireUser } from "@/server/auth";
 import { myCountedTransactions } from "@/server/data";
-import { Card, CategoryBars, ColumnChart, Legend, PaceChart, StackBar, StatTile, TableView } from "@/components/charts";
+import { Card, CategoryBars, ColumnChart, EmptyState, Legend, PageHeader, PaceChart, StackBar, StatTile, TableView } from "@/components/charts";
 import { MonthPicker, pickMonth } from "@/components/month-picker";
 
 export const metadata: Metadata = { title: "Análise" };
@@ -38,14 +39,8 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
   if (!txs.length) {
     return (
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Análise</h1>
-        <div className="mt-6 rounded-2xl border border-dashed border-line-strong px-6 py-16 text-center">
-          <p className="font-medium">Ainda não há dados para analisar</p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-ink-3">Importa um extrato e os gráficos aparecem aqui.</p>
-          <Link href="/importar" className="mt-6 inline-flex h-9 items-center rounded-lg bg-ink px-4 text-sm font-medium text-bg">
-            Importar extrato
-          </Link>
-        </div>
+        <PageHeader title="Análise" />
+        <EmptyState title="Ainda não há dados para analisar" text="Importa um extrato e os gráficos aparecem aqui." href="/importar" cta="Importar extrato" />
       </div>
     );
   }
@@ -62,13 +57,15 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
   const kinds = spendByKind(txs, month);
   const top = topMerchants(txs, month);
   const notes = insights(txs, month, (c) => formatEUR(c));
+  const recurring = recurringExpenses(txs, month);
+  const recurringMonthly = recurring.reduce((s, r) => s + r.monthlyCents, 0);
 
   const now = new Date();
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const today = month === thisMonth ? now.getDate() : daysInMonth(month);
   const pace = cumulativeByDay(txs, month);
   const pacePrev = months.includes(prev) ? cumulativeByDay(txs, prev) : [];
-  const projected = month === thisMonth && today > 3 ? Math.round((pace[today - 1] / today) * daysInMonth(month)) : null;
+  const projected = month === thisMonth ? projectMonth(txs, month, { day: today, days: daysInMonth(month) }) : null;
 
   const spentDelta = delta(cur.spentCents, before?.spentCents);
   const incomeDelta = delta(cur.incomeCents, before?.incomeCents);
@@ -77,19 +74,16 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Análise</h1>
-          <p className="mt-1 text-sm text-ink-3">Para onde vai o teu dinheiro. Só tu vês esta página.</p>
-        </div>
+      <PageHeader title="Análise" subtitle="Para onde vai o teu dinheiro. Só tu vês esta página.">
         <MonthPicker month={month} first={months[0]} last={months.at(-1)!} basePath="/analise" />
-      </div>
+      </PageHeader>
 
-      <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <StatTile label="Entradas" value={formatEUR(cur.incomeCents)} delta={incomeDelta?.text} deltaGood={incomeDelta ? incomeDelta.d >= 0 : null} />
         <StatTile label="Saídas" value={formatEUR(cur.spentCents)} delta={spentDelta?.text} deltaGood={spentDelta ? spentDelta.d <= 0 : null} />
         <StatTile label="Poupado" value={formatEUR(cur.netCents, { sign: cur.netCents > 0 })} delta={cur.netCents < 0 ? "Gastaste mais do que entrou" : null} deltaGood={cur.netCents < 0 ? false : null} />
         <StatTile
+          tone="accent"
           label="Taxa de poupança"
           value={cur.savingsRate == null ? "—" : pct(cur.savingsRate)}
           delta={rateDiff == null ? (cur.savingsRate == null ? "Sem entradas neste mês" : null) : `${rateDiff >= 0 ? "▲" : "▼"} ${Math.round(Math.abs(rateDiff) * 100)} p.p. vs mês anterior`}
@@ -98,10 +92,10 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
       </div>
 
       {notes.length > 0 && (
-        <ul className="mb-6 grid gap-2 sm:grid-cols-2">
+        <ul className="mb-4 grid gap-3 sm:grid-cols-2">
           {notes.map((n) => (
-            <li key={n.text} className="flex gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm">
-              <span className="text-ink-3" aria-hidden>
+            <li key={n.text} className="card flex gap-3 px-4 py-3 text-sm">
+              <span className={n.tone === "up" ? "text-danger" : n.tone === "down" ? "text-pos" : "text-ink-3"} aria-hidden>
                 {n.tone === "up" ? "↗" : n.tone === "down" ? "↘" : "•"}
               </span>
               <span className="text-ink-2">{n.text}</span>
@@ -110,7 +104,7 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
         </ul>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4">
         <Card title="Entradas e saídas por mês" subtitle="Inclui as despesas do casal que pagaste. Transferências ficam de fora." className="lg:col-span-5">
           <div className="mb-3">
             <Legend
@@ -186,6 +180,46 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
             />
           </div>
           <PaceChart current={pace} previous={pacePrev} today={today} currentLabel={monthLong(month)} previousLabel={monthLong(prev)} />
+        </Card>
+
+        <Card
+          id="recorrentes"
+          title="Despesas recorrentes"
+          subtitle={
+            recurring.length
+              ? `${recurring.length} pagamentos que se repetem todos os meses: ${formatEUR(recurringMonthly)}/mês, ${formatEUR(recurringMonthly * 12)}/ano. Cortar um destes poupa o valor anual inteiro.`
+              : "Pagamentos com valor parecido em pelo menos 3 dos últimos 6 meses."
+          }
+          className="scroll-mt-6 lg:col-span-5"
+        >
+          {recurring.length ? (
+            <div className="-mx-5 overflow-x-auto sm:-mx-6">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead className="text-left text-xs text-ink-3">
+                  <tr className="border-b border-line">
+                    <th className="px-5 pb-2 font-normal sm:px-6">Pagamento</th>
+                    <th className="pb-2 font-normal">Categoria</th>
+                    <th className="pb-2 text-right font-normal">Meses</th>
+                    <th className="pb-2 text-right font-normal">Por mês</th>
+                    <th className="px-5 pb-2 text-right font-normal sm:px-6">Por ano</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {recurring.map((r) => (
+                    <tr key={r.key}>
+                      <td className="max-w-56 truncate px-5 py-2.5 font-medium sm:px-6">{r.name}</td>
+                      <td className="py-2.5 text-ink-2">{r.categoryName ?? "Sem categoria"}</td>
+                      <td className="num py-2.5 text-right text-ink-3">{r.months}</td>
+                      <td className="num py-2.5 text-right">{formatEUR(r.monthlyCents)}</td>
+                      <td className="num px-5 py-2.5 text-right font-medium sm:px-6">{formatEUR(r.annualCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-ink-3">Ainda não há meses suficientes para detetar pagamentos recorrentes.</p>
+          )}
         </Card>
       </div>
     </div>

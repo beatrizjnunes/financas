@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const id = () => text("id").primaryKey().$defaultFn(() => crypto.randomUUID());
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
@@ -93,6 +93,18 @@ export const transactions = sqliteTable(
     index("transactions_owner_date").on(t.ownerId, t.date),
     index("transactions_scope_date").on(t.scope, t.date),
   ],
+);
+
+/** Orçamento mensal de cada pessoa por categoria (só existe linha para as categorias com limite). */
+export const budgets = sqliteTable(
+  "budgets",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    categoryId: text("category_id").notNull().references(() => categories.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    updatedAt: text("updated_at"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.categoryId] })],
 );
 
 export type User = typeof users.$inferSelect;

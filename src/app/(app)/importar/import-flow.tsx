@@ -340,14 +340,14 @@ function ReviewStep({
       )}
 
       {suspect > 0 && (
-        <p className="mb-6 rounded-xl border border-line bg-review-bg px-4 py-3 text-sm text-review-ink">
+        <p className="mb-6 rounded-xl bg-review-bg px-4 py-3 text-sm text-review-ink">
           {suspect === 1 ? "1 movimento parece" : `${suspect} movimentos parecem`} já existir (mesmo valor, à mesma hora). Vão ser
           importados em suspenso: não contam nos totais até confirmares em Movimentos se são mesmo duplicados.
         </p>
       )}
 
       {fresh.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface px-6 py-12 text-center">
+        <div className="card px-6 py-12 text-center">
           <p className="font-medium">Nada de novo neste ficheiro</p>
           <p className="mt-1 text-sm text-ink-3">Todos os movimentos já tinham sido importados antes.</p>
           <button onClick={onBack} className="mt-6 h-9 rounded-lg border border-line px-4 text-sm hover:bg-surface-2">
@@ -422,7 +422,7 @@ function ReviewStep({
             onClear={() => setSelected(new Set())}
           />
 
-          <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+          <div className="overflow-hidden card">
             <div className="tx-row border-b border-line px-4 py-2.5 text-xs text-ink-3">
               <input
                 type="checkbox"
@@ -486,7 +486,7 @@ function ReviewStep({
                 <button
                   onClick={onConfirm}
                   disabled={saving}
-                  className="h-10 rounded-lg bg-ink px-5 text-sm font-medium text-bg transition hover:opacity-90 disabled:opacity-50"
+                  className="btn-primary"
                 >
                   {saving ? "A importar…" : `Importar ${fresh.length} ${fresh.length === 1 ? "movimento" : "movimentos"}`}
                 </button>

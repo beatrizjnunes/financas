@@ -12,6 +12,8 @@ import {
   myTransactions,
   type TxFilters,
 } from "@/server/data";
+import { EmptyState, PageHeader } from "@/components/charts";
+import { Icon } from "@/components/icons";
 import { ReviewBanner } from "./review-banner";
 import { TxFiltersBar } from "./filters";
 import { TxList } from "./tx-list";
@@ -66,18 +68,14 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Movimentos</h1>
-          <p className="mt-1 text-sm text-ink-3">Todas as tuas contas, por ordem cronológica. Só tu vês esta página.</p>
-        </div>
-        <Link href="/importar" className="flex h-9 items-center rounded-lg bg-ink px-4 text-sm font-medium text-bg hover:opacity-90">
-          Importar extrato
+      <PageHeader title="Movimentos" subtitle="Todas as tuas contas, por ordem cronológica. Só tu vês esta página.">
+        <Link href="/importar" className="btn-primary">
+          <Icon name="upload" className="size-4" /> Importar extrato
         </Link>
-      </div>
+      </PageHeader>
 
       {imported === 0 && (
-        <div className="mb-6 flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 text-sm">
+        <div className="card mb-4 flex items-center justify-between rounded-xl px-4 py-3 text-sm">
           <span>Não havia movimentos novos para importar.</span>
           <Link href="/movimentos" className="text-ink-3 hover:text-ink" aria-label="Fechar">
             ✕
@@ -85,7 +83,7 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
         </div>
       )}
       {(suspended > 0 || filters.suspended) && (
-        <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-review-bg px-4 py-3 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-review-bg px-4 py-3 text-sm">
           <p className="mr-auto">
             <span className="font-medium">
               {suspended} {suspended === 1 ? "possível duplicado em suspenso" : "possíveis duplicados em suspenso"}
@@ -111,15 +109,12 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
       )}
 
       {!hasAny ? (
-        <div className="rounded-2xl border border-dashed border-line-strong px-6 py-16 text-center">
-          <p className="font-medium">Ainda não há movimentos</p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-ink-3">
-            Exporta o extrato da tua conta em CSV e importa-o. Revês tudo antes de gravar.
-          </p>
-          <Link href="/importar" className="mt-6 inline-flex h-9 items-center rounded-lg bg-ink px-4 text-sm font-medium text-bg">
-            Importar o primeiro extrato
-          </Link>
-        </div>
+        <EmptyState
+          title="Ainda não há movimentos"
+          text="Exporta o extrato da tua conta em CSV e importa-o. Revês tudo antes de gravar."
+          href="/importar"
+          cta="Importar o primeiro extrato"
+        />
       ) : (
         <>
           <TxFiltersBar
@@ -127,7 +122,7 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
             categories={categories.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName }))}
           />
 
-          <dl className="mb-6 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-line bg-line">
+          <dl className="mb-4 grid grid-cols-3 gap-3 lg:gap-4">
             <Total label="Entradas" value={formatEUR(income)} className="text-pos" />
             <Total label="Saídas" value={formatEUR(spent)} />
             <Total label="Saldo do período" value={formatEUR(income + spent, { sign: true })} />
@@ -150,7 +145,7 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
 
 function Total({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
-    <div className="bg-surface px-4 py-3 sm:px-5 sm:py-4">
+    <div className="card px-4 py-3 sm:px-5 sm:py-4">
       <dt className="text-xs text-ink-3">{label}</dt>
       <dd className={`num mt-1 text-base font-semibold sm:text-xl ${className}`}>{value}</dd>
     </div>

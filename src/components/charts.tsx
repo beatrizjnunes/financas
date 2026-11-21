@@ -400,24 +400,172 @@ export function PaceChart({
 
 /* ---------- peças de layout ---------- */
 
-export function Card({ title, subtitle, children, className = "" }: { title: string; subtitle?: React.ReactNode; children: React.ReactNode; className?: string }) {
+export function Card({
+  title,
+  subtitle,
+  action,
+  children,
+  className = "",
+  id,
+}: {
+  title: string;
+  subtitle?: React.ReactNode;
+  /** Ligação ou botão no canto superior direito. */
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  id?: string;
+}) {
   return (
-    <section className={`min-w-0 rounded-2xl border border-line bg-surface p-5 ${className}`}>
-      <h2 className="text-sm font-medium">{title}</h2>
-      {subtitle && <p className="mt-0.5 text-xs text-ink-3">{subtitle}</p>}
+    <section id={id} className={`card p-5 sm:p-6 ${className}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-ink-3">{subtitle}</p>}
+        </div>
+        {action}
+      </div>
       <div className="mt-4">{children}</div>
     </section>
   );
 }
 
-export function StatTile({ label, value, delta, deltaGood }: { label: string; value: string; delta?: string | null; deltaGood?: boolean | null }) {
+export function CardLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <div className="bg-surface px-4 py-4 sm:px-5">
-      <p className="text-xs text-ink-3">{label}</p>
-      <p className="mt-1 text-lg font-semibold tracking-tight sm:text-2xl">{value}</p>
-      {delta && (
-        <p className={`mt-0.5 text-xs ${deltaGood == null ? "text-ink-3" : deltaGood ? "text-pos" : "text-danger"}`}>{delta}</p>
+    <Link href={href} className="shrink-0 text-xs font-medium text-accent hover:underline">
+      {children}
+    </Link>
+  );
+}
+
+export function StatTile({
+  label,
+  value,
+  delta,
+  deltaGood,
+  tone = "default",
+  children,
+}: {
+  label: string;
+  value: string;
+  delta?: string | null;
+  deltaGood?: boolean | null;
+  /** "accent": cartão em verde-sálvia para o número mais importante. */
+  tone?: "default" | "accent";
+  children?: React.ReactNode;
+}) {
+  const accent = tone === "accent";
+  const chip = deltaGood == null ? "chip-muted" : deltaGood ? "chip-pos" : "chip-neg";
+  return (
+    <div
+      className="card flex min-h-[104px] items-end justify-between gap-3 px-5 py-4"
+      style={accent ? { background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", color: "var(--accent-ink)" } : undefined}
+    >
+      <div className="min-w-0">
+        <p className={`text-xs ${accent ? "opacity-75" : "text-ink-3"}`}>{label}</p>
+        <p className="num mt-1 truncate text-xl font-semibold tracking-tight sm:text-[26px]">{value}</p>
+        {delta && (
+          <p className="mt-1.5">
+            <span className={`chip ${accent ? "" : chip}`} style={accent ? { background: "color-mix(in srgb, var(--accent-ink) 14%, transparent)" } : undefined}>
+              {delta}
+            </span>
+          </p>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Mini-gráfico de colunas para os indicadores. */
+export function Sparkbars({ values, highlightLast = true, light = false }: { values: number[]; highlightLast?: boolean; light?: boolean }) {
+  const max = Math.max(1, ...values);
+  return (
+    <div className="hidden h-10 shrink-0 items-end gap-1 sm:flex" aria-hidden>
+      {values.map((v, i) => {
+        const last = highlightLast && i === values.length - 1;
+        return (
+          <span
+            key={i}
+            className="w-1.5 rounded-full"
+            style={{
+              height: `${Math.max(12, (v / max) * 100)}%`,
+              background: light ? (last ? "#fff" : "rgba(255,255,255,0.35)") : last ? "var(--accent)" : "var(--chart-muted)",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** Medidor semicircular (0–100%+). Acima de 100% fica a vermelho. */
+export function Gauge({ ratio, label, sub }: { ratio: number; label: string; sub?: string }) {
+  const r = 70;
+  const c = Math.PI * r;
+  const shown = Math.min(Math.max(ratio, 0), 1);
+  const color = ratio > 1 ? "var(--danger)" : ratio > 0.85 ? "var(--warn)" : "var(--accent)";
+  return (
+    <div className="mx-auto w-full max-w-[220px]" role="img" aria-label={`${label}${sub ? `, ${sub}` : ""}`}>
+      <div className="relative">
+      <svg viewBox="0 0 180 100" className="w-full">
+        <path d="M20 90 A70 70 0 0 1 160 90" fill="none" stroke="var(--accent-soft)" strokeWidth={18} strokeLinecap="round" />
+        <path
+          d="M20 90 A70 70 0 0 1 160 90"
+          fill="none"
+          stroke={color}
+          strokeWidth={18}
+          strokeLinecap="round"
+          strokeDasharray={`${shown * c} ${c}`}
+        />
+      </svg>
+      <p className="num absolute inset-x-0 bottom-1 text-center text-2xl font-semibold tracking-tight">{label}</p>
+      </div>
+      {sub && <p className="num -mb-1 mt-1 text-center text-xs text-ink-3">{sub}</p>}
+    </div>
+  );
+}
+
+/** Barra de progresso de orçamento: verde, laranja (atenção) ou vermelho (excedido). Marca opcional da previsão. */
+export function BudgetBar({ spent, budget, projected }: { spent: number; budget: number; projected?: number | null }) {
+  const color = spent > budget ? "var(--danger)" : projected != null && projected > budget ? "var(--warn)" : "var(--accent)";
+  const scale = Math.max(budget, spent, projected ?? 0, 1);
+  return (
+    <div className="relative h-2 rounded-full bg-surface-2">
+      <div className="h-2 rounded-full" style={{ width: `${(spent / scale) * 100}%`, background: color, minWidth: spent > 0 ? 4 : 0 }} />
+      {/* limite do orçamento */}
+      {scale > budget && <span className="absolute -top-1 h-4 w-0.5 rounded-full bg-ink-2" style={{ left: `calc(${(budget / scale) * 100}% - 1px)` }} />}
+      {projected != null && projected > spent && (
+        <span
+          className="absolute top-0 h-2 rounded-full opacity-30"
+          style={{ left: `${(spent / scale) * 100}%`, width: `${((Math.min(projected, scale) - spent) / scale) * 100}%`, background: color }}
+          title={`Previsão: ${formatEUR(projected)}`}
+        />
       )}
+    </div>
+  );
+}
+
+export function EmptyState({ title, text, href, cta }: { title: string; text: React.ReactNode; href: string; cta: string }) {
+  return (
+    <div className="card px-6 py-16 text-center">
+      <p className="font-semibold">{title}</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-ink-3">{text}</p>
+      <Link href={href} className="btn-primary mt-6">
+        {cta}
+      </Link>
+    </div>
+  );
+}
+
+export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 className="text-[26px] font-semibold tracking-tight sm:text-[28px]">{title}</h1>
+        {subtitle && <p className="mt-1 text-sm text-ink-3">{subtitle}</p>}
+      </div>
+      {children}
     </div>
   );
 }

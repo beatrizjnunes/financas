@@ -5,10 +5,10 @@ import { monthLong, nextMonth, prevMonth } from "@/lib/analytics";
 export function MonthPicker({ month, first, last, basePath }: { month: string; first: string; last: string; basePath: string }) {
   const prev = prevMonth(month);
   const next = nextMonth(month);
-  const btn = "flex size-8 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 transition hover:border-line-strong hover:text-ink";
-  const off = "flex size-8 items-center justify-center rounded-lg border border-line text-ink-3 opacity-40";
+  const btn = "flex size-8 items-center justify-center rounded-full text-ink-2 transition hover:bg-surface-2 hover:text-ink";
+  const off = "flex size-8 items-center justify-center rounded-full text-ink-3 opacity-35";
   return (
-    <div className="flex items-center gap-2">
+    <div className="card flex items-center gap-1 rounded-full p-1">
       {prev >= first ? (
         <Link href={`${basePath}?mes=${prev}`} className={btn} aria-label="Mês anterior">
           ‹
@@ -16,7 +16,7 @@ export function MonthPicker({ month, first, last, basePath }: { month: string; f
       ) : (
         <span className={off}>‹</span>
       )}
-      <span className="min-w-36 text-center text-sm font-medium first-letter:uppercase">{monthLong(month)}</span>
+      <span className="min-w-32 text-center text-sm font-medium first-letter:uppercase">{monthLong(month)}</span>
       {next <= last ? (
         <Link href={`${basePath}?mes=${next}`} className={btn} aria-label="Mês seguinte">
           ›

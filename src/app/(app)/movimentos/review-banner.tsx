@@ -9,7 +9,7 @@ export function ReviewBanner({ toReview, imported, filtering }: { toReview: numb
 
   if (toReview === 0) {
     return (
-      <div className="mb-6 flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 text-sm">
+      <div className="mb-6 flex items-center justify-between card rounded-xl px-4 py-3 text-sm">
         <span>Está tudo revisto. 👌</span>
         <Link href="/movimentos" className="text-ink-2 hover:text-ink">
           Ver todos os movimentos
@@ -19,7 +19,7 @@ export function ReviewBanner({ toReview, imported, filtering }: { toReview: numb
   }
 
   return (
-    <div className="needs-review mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-review-bg px-4 py-3 text-sm">
+    <div className="needs-review mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-review-bg px-4 py-3 text-sm">
       <div className="mr-auto">
         {imported ? (
           <p className="font-medium">

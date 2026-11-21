@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { daysInMonth, monthLong, monthOf, monthShort, nextMonth, prevMonth, spendByCategory, spendByKind, type ATx } from "@/lib/analytics";
 import { formatDate, formatEUR } from "@/lib/format";
 import { KIND_LABEL, KINDS } from "@/lib/labels";
 import { coupleBalance } from "@/lib/split";
 import { requireUser } from "@/server/auth";
 import { coupleTransactions, listPeople } from "@/server/data";
-import { Card, CategoryBars, ColumnChart, Legend, SeriesKey, StackBar, StatTile, TableView } from "@/components/charts";
+import { Card, CategoryBars, ColumnChart, EmptyState, Legend, PageHeader, SeriesKey, StackBar, StatTile, TableView } from "@/components/charts";
 import { MonthPicker, pickMonth } from "@/components/month-picker";
 
 export const metadata: Metadata = { title: "Casal" };
@@ -26,29 +25,23 @@ export default async function CasalPage({ searchParams }: { searchParams: Promis
   const colorOf = (id: string) => PERSON_COLOR[id === a.id ? 0 : 1];
   const nameOf = (id: string) => (id === a.id ? a.name : b.name);
 
-  const header = (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Casal</h1>
-      <p className="mt-1 text-sm text-ink-3">
-        Partilhado entre {a.name} e {b.name}. Só aparecem os movimentos marcados como Casal — o resto continua privado.
-      </p>
-    </div>
-  );
+  const subtitle = `Partilhado entre ${a.name} e ${b.name}. Só aparecem os movimentos marcados como Casal — o resto continua privado.`;
 
   if (!txs.length) {
     return (
       <div>
-        {header}
-        <div className="mt-6 rounded-2xl border border-dashed border-line-strong px-6 py-16 text-center">
-          <p className="font-medium">Ainda não há despesas do casal</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-ink-3">
-            Em Movimentos (ou ao importar), marca como <span className="font-medium text-ink-2">Casal</span> o que é da casa: renda,
-            supermercado, contas… Aparece aqui para os dois, com quem pagou e o saldo entre vocês.
-          </p>
-          <Link href="/movimentos" className="mt-6 inline-flex h-9 items-center rounded-lg bg-ink px-4 text-sm font-medium text-bg">
-            Ir para Movimentos
-          </Link>
-        </div>
+        <PageHeader title="Casal" subtitle={subtitle} />
+        <EmptyState
+          title="Ainda não há despesas do casal"
+          text={
+            <>
+              Em Movimentos (ou ao importar), marca como <span className="font-medium text-ink-2">Casal</span> o que é da casa: renda,
+              supermercado, contas… Aparece aqui para os dois, com quem pagou e o saldo entre vocês.
+            </>
+          }
+          href="/movimentos"
+          cta="Ir para Movimentos"
+        />
       </div>
     );
   }
@@ -76,13 +69,12 @@ export default async function CasalPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        {header}
+      <PageHeader title="Casal" subtitle={subtitle}>
         <MonthPicker month={month} first={months[0]} last={months.at(-1)!} basePath="/casal" />
-      </div>
+      </PageHeader>
 
       {/* Saldo entre os dois */}
-      <section className="mb-6 rounded-2xl border border-line bg-surface p-6">
+      <section className="card mb-4 p-6 sm:p-7">
         <p className="text-xs text-ink-3">Saldo entre vocês · divisão 50/50 · desde {formatDate(since)}</p>
         {balance.debt ? (
           <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-4xl">
@@ -115,8 +107,9 @@ export default async function CasalPage({ searchParams }: { searchParams: Promis
         </p>
       </section>
 
-      <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <StatTile
+          tone="accent"
           label={`Gasto em ${monthShort(month)}`}
           value={formatEUR(monthBalance.totalCents)}
           delta={d == null ? null : `${d >= 0 ? "▲" : "▼"} ${Math.round(Math.abs(d) * 100)}% vs mês anterior`}
@@ -128,7 +121,7 @@ export default async function CasalPage({ searchParams }: { searchParams: Promis
         <StatTile label="Despesas fixas" value={formatEUR(kinds.fixa)} delta={`${inMonth.length} movimentos no mês`} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4">
         <Card title="Por categoria" subtitle={`Despesas do casal em ${monthLong(month)}.`} className="lg:col-span-3">
           {cats.length ? (
             <CategoryBars

@@ -149,3 +149,203 @@ export function insights(txs: ATx[], month: string, fmt: (c: number) => string):
 }
 
 export const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+/** Os `n` meses anteriores a `month` (do mais antigo para o mais recente), sem recuar antes de `first`. */
+export function monthsBefore(month: string, n: number, first?: string): string[] {
+  const out: string[] = [];
+  for (let m = prevMonth(month), i = 0; i < n; i++, m = prevMonth(m)) {
+    if (first && m < first) break;
+    out.unshift(m);
+  }
+  return out;
+}
+
+export type CategoryAverage = { key: string; name: string; avgCents: number };
+
+/**
+ * Gasto médio mensal por categoria nos `n` meses anteriores a `month` (só conta meses dentro do
+ * período com dados, para não diluir a média com meses em que ainda não havia extratos).
+ */
+export function averageByCategory(txs: ATx[], month: string, n = 3): Map<string, CategoryAverage> {
+  const first = txs.length ? monthOf(txs[0].date) : month;
+  const window = new Set(monthsBefore(month, n, first));
+  const out = new Map<string, CategoryAverage>();
+  if (!window.size) return out;
+  for (const t of txs) {
+    if (t.amountCents >= 0 || !window.has(monthOf(t.date))) continue;
+    const key = t.categoryId ?? "sem";
+    const cur = out.get(key) ?? { key, name: t.categoryName ?? "Sem categoria", avgCents: 0 };
+    cur.avgCents += -t.amountCents;
+    out.set(key, cur);
+  }
+  for (const c of out.values()) c.avgCents = Math.round(c.avgCents / window.size);
+  return out;
+}
+
+/** Arredonda um valor sugerido para cima, a múltiplos de 5 €. */
+export const roundUpToFive = (cents: number) => Math.ceil(cents / 500) * 500;
+
+export type BudgetLine = {
+  key: string;
+  name: string;
+  budgetCents: number | null;
+  spentCents: number;
+  avgCents: number;
+  /** Gasto previsto no fim do mês, ao ritmo atual (só no mês corrente). */
+  projectedCents: number | null;
+  status: "sem" | "ok" | "atencao" | "excedido";
+};
+
+/**
+ * Estado de cada orçamento. "atenção" quando já se gastou ≥ 85% ou a previsão passa o limite;
+ * "excedido" quando o gasto já o ultrapassou.
+ */
+export function budgetLines(
+  txs: ATx[],
+  month: string,
+  categories: { id: string; name: string }[],
+  budgets: Map<string, number>,
+  progress: { day: number; days: number } | null,
+): BudgetLine[] {
+  const split = spendSplit(txs, month);
+  const avg = averageByCategory(txs, month);
+  return categories.map((c) => {
+    const budgetCents = budgets.get(c.id) ?? null;
+    const s = split.get(c.id) ?? { steady: 0, variable: 0 };
+    const spentCents = s.steady + s.variable;
+    const projectedCents = progress ? project(s, progress) : null;
+    return {
+      key: c.id,
+      name: c.name,
+      budgetCents,
+      spentCents,
+      avgCents: avg.get(c.id)?.avgCents ?? 0,
+      projectedCents,
+      status: budgetStatus(spentCents, budgetCents, projectedCents),
+    };
+  });
+}
+
+/** "excedido" se já passou o limite; "atenção" se a previsão do mês o passa; senão "ok". */
+export function budgetStatus(spent: number, budget: number | null, projected: number | null): BudgetLine["status"] {
+  if (budget == null) return "sem";
+  if (spent > budget) return "excedido";
+  if (projected != null && projected > budget) return "atencao";
+  return "ok";
+}
+
+type Split = { steady: number; variable: number };
+
+/**
+ * Gasto do mês por categoria, separado em "certo" (fixas e pontuais, que não se repetem ao longo do mês)
+ * e variável (que se pode extrapolar pelo ritmo diário).
+ */
+export function spendSplit(txs: ATx[], month: string): Map<string, Split> {
+  const out = new Map<string, Split>();
+  for (const t of txs) {
+    if (t.amountCents >= 0 || monthOf(t.date) !== month) continue;
+    const key = t.categoryId ?? "sem";
+    const cur = out.get(key) ?? { steady: 0, variable: 0 };
+    if (t.kind === "variavel") cur.variable += -t.amountCents;
+    else cur.steady += -t.amountCents;
+    out.set(key, cur);
+  }
+  return out;
+}
+
+/** Previsão para o fim do mês: o que é certo fica igual, o variável segue o ritmo diário. */
+export const project = (s: Split, p: { day: number; days: number }) => s.steady + Math.round((s.variable / Math.max(p.day, 1)) * p.days);
+
+/** Previsão do gasto total do mês (null se o mês já fechou ou ainda vai no início). */
+export function projectMonth(txs: ATx[], month: string, p: { day: number; days: number } | null): number | null {
+  if (!p || p.day <= 3) return null;
+  let steady = 0;
+  let variable = 0;
+  for (const s of spendSplit(txs, month).values()) {
+    steady += s.steady;
+    variable += s.variable;
+  }
+  return project({ steady, variable }, p);
+}
+
+export type Recurring = {
+  key: string;
+  name: string;
+  categoryName: string | null;
+  monthlyCents: number;
+  annualCents: number;
+  months: number;
+  lastDate: string;
+};
+
+/** Normaliza descrições para agrupar o mesmo comerciante: sem números, pontuação nem espaços repetidos. */
+export const merchantKey = (d: string) =>
+  d
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[0-9*#/\\.,:;_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const median = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+};
+
+/**
+ * Despesas que se repetem todos os meses com valor parecido (subscrições, renda, ginásio, seguros…).
+ * Olha para os 6 meses até `month`: o comerciante tem de aparecer em ≥ 3 meses, no máximo ~1 vez por mês,
+ * com ≥ 75% dos meses a ±25% da mediana, e ainda estar ativo (visto neste mês ou no anterior).
+ */
+export function recurringExpenses(txs: ATx[], month: string): Recurring[] {
+  const window = new Set([...monthsBefore(month, 5), month]);
+  const groups = new Map<string, { name: string; cat: string | null; byMonth: Map<string, number>; count: number; last: string }>();
+  for (const t of txs) {
+    if (t.amountCents >= 0) continue;
+    const m = monthOf(t.date);
+    if (!window.has(m)) continue;
+    const key = merchantKey(t.description);
+    if (!key) continue;
+    const g = groups.get(key) ?? { name: t.description, cat: t.categoryName, byMonth: new Map(), count: 0, last: "" };
+    g.byMonth.set(m, (g.byMonth.get(m) ?? 0) + -t.amountCents);
+    g.count += 1;
+    if (t.date >= g.last) {
+      g.last = t.date;
+      g.name = t.description;
+      g.cat = t.categoryName;
+    }
+    groups.set(key, g);
+  }
+  const out: Recurring[] = [];
+  for (const [key, g] of groups) {
+    const vals = [...g.byMonth.values()];
+    if (vals.length < 3 || g.count / vals.length > 1.5) continue;
+    if (monthOf(g.last) < prevMonth(month)) continue;
+    const med = median(vals);
+    const steady = vals.filter((v) => Math.abs(v - med) <= med * 0.25).length / vals.length;
+    if (steady < 0.75) continue;
+    out.push({ key, name: g.name, categoryName: g.cat, monthlyCents: med, annualCents: med * 12, months: vals.length, lastDate: g.last });
+  }
+  return out.sort((a, b) => b.monthlyCents - a.monthlyCents);
+}
+
+/** Se `month` é o mês corrente, devolve o dia de hoje e o n.º de dias do mês; senão null (mês fechado). */
+export function monthProgress(month: string, now = new Date()): { day: number; days: number } | null {
+  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return month === cur ? { day: now.getDate(), days: daysInMonth(month) } : null;
+}
+
+/** Categorias que fazem sentido orçamentar (sem receitas nem transferências). */
+export function expenseCategories<T extends { name: string; groupName: string }>(cats: T[]): T[] {
+  return cats.filter((c) => c.groupName !== "Receitas" && c.name !== "Transferências");
+}
+
+/** Média de gasto mensal nos `n` meses completos anteriores a `month` (null se não houver nenhum). */
+export function averageMonthlySpend(flow: MonthFlow[], month: string, n = 3): number | null {
+  const months = new Set(monthsBefore(month, n));
+  const xs = flow.filter((f) => months.has(f.month));
+  if (!xs.length) return null;
+  return Math.round(xs.reduce((s, f) => s + f.spentCents, 0) / xs.length);
+}

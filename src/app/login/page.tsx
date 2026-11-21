@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Logo } from "@/components/icons";
 import { loginAction } from "./actions";
 
 export default function LoginPage() {
@@ -8,8 +9,9 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-dvh items-center justify-center px-4">
-      <form action={action} className="w-full max-w-xs">
-        <h1 className="text-xl font-semibold tracking-tight">Finanças</h1>
+      <form action={action} className="card w-full max-w-sm p-8">
+        <Logo className="size-10" />
+        <h1 className="mt-5 text-2xl font-semibold tracking-tight">Finanças</h1>
         <p className="mt-1 text-sm text-ink-3">Entra com a tua conta.</p>
 
         <div className="mt-8 space-y-3">
@@ -25,7 +27,7 @@ export default function LoginPage() {
 
         {error && <p className="mt-4 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">{error}</p>}
 
-        <button disabled={pending} className="mt-6 h-10 w-full rounded-lg bg-ink text-sm font-medium text-bg transition hover:opacity-90 disabled:opacity-50">
+        <button disabled={pending} className="btn-primary mt-6 w-full">
           {pending ? "A entrar…" : "Entrar"}
         </button>
       </form>

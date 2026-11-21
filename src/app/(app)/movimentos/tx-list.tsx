@@ -65,7 +65,7 @@ export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categ
 
   if (!optimistic.length) {
     return (
-      <div className="rounded-2xl border border-line bg-surface px-6 py-12 text-center text-sm text-ink-3">
+      <div className="card px-6 py-12 text-center text-sm text-ink-3">
         Nenhum movimento com estes filtros.
       </div>
     );
@@ -98,7 +98,7 @@ export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categ
         onReviewed={() => update([...selected], { needsReview: false })}
         onClear={() => setSelected(new Set())}
       />
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+      <div className="overflow-hidden card">
         {days.map(({ day, rows }) => {
           const net = rows
             .filter((r) => COUNTED_SCOPES.includes(r.scope) && !r.duplicateOf)

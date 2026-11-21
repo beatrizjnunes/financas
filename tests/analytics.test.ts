@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { cumulativeByDay, insights, monthlyFlow, prevMonth, spendByCategory, spendByKind, topMerchants, type ATx } from "@/lib/analytics";
+import {
+  averageByCategory,
+  averageMonthlySpend,
+  budgetLines,
+  cumulativeByDay,
+  insights,
+  merchantKey,
+  monthlyFlow,
+  monthsBefore,
+  prevMonth,
+  projectMonth,
+  recurringExpenses,
+  roundUpToFive,
+  spendByCategory,
+  spendByKind,
+  topMerchants,
+  type ATx,
+} from "@/lib/analytics";
 
 const tx = (date: string, amountCents: number, categoryName: string | null = "Supermercado", description = "AH"): ATx => ({
   date: `${date} 12:00:00`,
@@ -60,6 +77,91 @@ it("cumulativeByDay acumula até ao fim do mês", () => {
   expect(c[0]).toBe(0);
   expect(c[1]).toBe(143000);
   expect(c[30]).toBe(153000);
+});
+
+describe("averageByCategory", () => {
+  it("faz a média dos meses anteriores com dados, sem contar o próprio mês", () => {
+    const avg = averageByCategory(data, "2026-10");
+    // ago 10 €, set 20 € → 2 meses com dados (julho fica de fora por ser antes do 1.º extrato)
+    expect(avg.get("Supermercado")?.avgCents).toBe(1500);
+    expect(avg.has("Renda")).toBe(false);
+  });
+  it("monthsBefore não recua antes do primeiro mês", () => {
+    expect(monthsBefore("2026-10", 3, "2026-08")).toEqual(["2026-08", "2026-09"]);
+    expect(monthsBefore("2026-01", 2)).toEqual(["2025-11", "2025-12"]);
+  });
+});
+
+describe("budgetLines", () => {
+  const cats = [
+    { id: "Supermercado", name: "Supermercado" },
+    { id: "Renda", name: "Renda" },
+    { id: "Lazer", name: "Lazer" },
+  ];
+  it("classifica ok / atenção / excedido / sem orçamento", () => {
+    const b = new Map([
+      ["Supermercado", 6000],
+      ["Renda", 150000],
+      ["Lazer", 1000],
+    ]);
+    const lines = budgetLines(data, "2026-10", cats, b, null);
+    expect(lines.find((l) => l.key === "Supermercado")?.status).toBe("excedido");
+    expect(lines.find((l) => l.key === "Renda")?.status).toBe("ok"); // 95%, mês fechado
+    expect(lines.find((l) => l.key === "Lazer")?.status).toBe("ok");
+    expect(budgetLines(data, "2026-10", cats, new Map(), null)[0].status).toBe("sem");
+  });
+  it("usa a previsão no mês corrente", () => {
+    const lines = budgetLines(data, "2026-10", cats, new Map([["Supermercado", 10000]]), { day: 10, days: 31 });
+    const s = lines.find((l) => l.key === "Supermercado")!;
+    expect(s.projectedCents).toBe(21700);
+    expect(s.status).toBe("atencao");
+  });
+  it("não extrapola despesas fixas (a renda paga no dia 2 não «cresce»)", () => {
+    const lines = budgetLines(data, "2026-10", cats, new Map([["Renda", 143000]]), { day: 10, days: 31 });
+    const r = lines.find((l) => l.key === "Renda")!;
+    expect(r.projectedCents).toBe(143000);
+    expect(r.status).toBe("ok");
+  });
+  it("projectMonth: fixas ficam, variáveis seguem o ritmo", () => {
+    // fixa 1430 € + variáveis 100 € em 10 dias → 1430 + 310
+    expect(projectMonth(data, "2026-10", { day: 10, days: 31 })).toBe(174000);
+    expect(projectMonth(data, "2026-10", null)).toBeNull();
+  });
+  it("roundUpToFive", () => {
+    expect(roundUpToFive(1201)).toBe(1500);
+    expect(roundUpToFive(1500)).toBe(1500);
+  });
+});
+
+describe("recurringExpenses", () => {
+  const sub = (m: string, c: number, d = "NETFLIX.COM 1234") => tx(`2026-${m}-03`, c, "Subscrições", d);
+  const rec = [
+    sub("06", -1199),
+    sub("07", -1199, "NETFLIX.COM 5678"),
+    sub("08", -1299),
+    sub("09", -1299),
+    // supermercado: muitas vezes por mês → não é recorrente
+    ...["06", "07", "08", "09"].flatMap((m) => [tx(`2026-${m}-01`, -3000), tx(`2026-${m}-10`, -4500), tx(`2026-${m}-20`, -2000)]),
+    // ginásio que acabou em julho → já não está ativo
+    ...["04", "05", "06", "07"].map((m) => tx(`2026-${m}-05`, -3500, "Lazer", "GINASIO")),
+    // valores muito diferentes → não é estável
+    ...["06", "07", "08", "09"].map((m, i) => tx(`2026-${m}-15`, -[1000, 9000, 2500, 15000][i], "Compras online", "AMAZON")),
+  ];
+  const r = recurringExpenses(rec, "2026-09");
+  it("deteta subscrições estáveis e ativas", () => {
+    expect(r.map((x) => x.key)).toEqual(["netflix com"]);
+    expect(r[0]).toMatchObject({ monthlyCents: 1249, annualCents: 14988, months: 4, categoryName: "Subscrições" });
+  });
+  it("merchantKey ignora números e acentos", () => {
+    expect(merchantKey("Pingo Doce Lisboa 0231")).toBe(merchantKey("PINGO DOCE LISBOA 9999"));
+    expect(merchantKey("Água")).toBe("agua");
+  });
+});
+
+it("averageMonthlySpend usa os meses completos anteriores", () => {
+  const f = monthlyFlow(data);
+  expect(averageMonthlySpend(f, "2026-10")).toBe(1500);
+  expect(averageMonthlySpend(f, "2026-08")).toBeNull();
 });
 
 it("insights destacam variações relevantes", () => {
