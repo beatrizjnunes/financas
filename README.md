@@ -70,9 +70,11 @@ Turso (produção): `turso db shell <nome> .dump > backup.sql`. A exportação e
 
 1. Na Vercel: *Storage → Turso → Create*, ligada ao projeto com o prefixo `DATABASE`. Cria
    `DATABASE_TURSO_DATABASE_URL` e `DATABASE_TURSO_AUTH_TOKEN` (também se aceitam `DATABASE_URL` / `DATABASE_AUTH_TOKEN`).
-2. `npx vercel link` e `npx vercel env pull .env.production.local --environment=production`.
-3. Com essas variáveis carregadas: `npm run db:migrate && npm run db:seed`.
-4. Faz deploy do repositório na Vercel.
+2. Em *Settings → Environment Variables* (Production, marcadas como *Sensitive*): `BEA_PASSWORD`, `IVO_PASSWORD`,
+   `BEA_BANK_NAMES`, `IVO_BANK_NAMES`.
+3. Cada deploy de produção corre `db:migrate` e `db:seed` antes do `next build` (ver `vercel.json`), por isso não é
+   preciso ter os segredos da Turso localmente (a Vercel não os deixa descarregar). Para mudar uma password, altera-a
+   na Vercel e faz *Redeploy*.
 
 ## Estrutura
 
