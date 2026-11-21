@@ -53,7 +53,7 @@ export default async function OrcamentosPage({ searchParams }: { searchParams: P
             label={spent > total ? "Acima do orçamento" : progress ? "Disponível por dia" : "Sobrou"}
             value={spent > total ? formatEUR(spent - total) : progress ? formatEUR((total - spent) / daysLeft) : formatEUR(total - spent)}
             delta={progress && spent <= total ? `${formatEUR(total - spent)} em ${daysLeft} dias` : over || warn ? `${over} excedidas · ${warn} em atenção` : "Tudo dentro do limite"}
-            deltaGood={over ? false : warn ? null : true}
+            deltaGood={spent > total ? false : progress ? null : over ? false : warn ? null : true}
           />
           <StatTile
             tone="accent"

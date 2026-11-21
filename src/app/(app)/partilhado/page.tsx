@@ -103,8 +103,8 @@ export default async function PartilhadoPage({ searchParams }: { searchParams: P
           ))}
         </div>
         <p className="mt-4 text-xs text-ink-3">
-          Total partilhado: {formatEUR(balance.totalCents)}. Os botões “Acertar contas” e a divisão por despesa (60/40, “paga só um”) chegam na
-          próxima fase.
+          Total partilhado: {formatEUR(balance.totalCents)}. Se só parte de uma despesa for
+          partilhada, divide-a no detalhe do movimento.
         </p>
       </section>
 

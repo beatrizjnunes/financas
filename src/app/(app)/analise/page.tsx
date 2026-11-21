@@ -194,12 +194,12 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
         >
           {recurring.length ? (
             <div className="-mx-5 overflow-x-auto sm:-mx-6">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full text-sm">
                 <thead className="text-left text-xs text-ink-3">
                   <tr className="border-b border-line">
                     <th className="px-5 pb-2 font-normal sm:px-6">Pagamento</th>
-                    <th className="pb-2 font-normal">Categoria</th>
-                    <th className="pb-2 text-right font-normal">Meses</th>
+                    <th className="hidden pb-2 font-normal sm:table-cell">Categoria</th>
+                    <th className="hidden pb-2 text-right font-normal sm:table-cell">Meses</th>
                     <th className="pb-2 text-right font-normal">Por mês</th>
                     <th className="px-5 pb-2 text-right font-normal sm:px-6">Por ano</th>
                   </tr>
@@ -207,9 +207,9 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
                 <tbody className="divide-y divide-line">
                   {recurring.map((r) => (
                     <tr key={r.key}>
-                      <td className="max-w-56 truncate px-5 py-2.5 font-medium sm:px-6">{r.name}</td>
-                      <td className="py-2.5 text-ink-2">{r.categoryName ?? "Sem categoria"}</td>
-                      <td className="num py-2.5 text-right text-ink-3">{r.months}</td>
+                      <td className="max-w-40 truncate px-5 py-2.5 font-medium sm:max-w-56 sm:px-6">{r.name}</td>
+                      <td className="hidden py-2.5 text-ink-2 sm:table-cell">{r.categoryName ?? "Sem categoria"}</td>
+                      <td className="num hidden py-2.5 text-right text-ink-3 sm:table-cell">{r.months}</td>
                       <td className="num py-2.5 text-right">{formatEUR(r.monthlyCents)}</td>
                       <td className="num px-5 py-2.5 text-right font-medium sm:px-6">{formatEUR(r.annualCents)}</td>
                     </tr>

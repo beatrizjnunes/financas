@@ -156,25 +156,25 @@ export function TxDetail({
           </label>
         </div>
 
-        <div className="sticky bottom-0 mt-auto flex items-center justify-end gap-3 border-t border-line bg-surface px-6 py-4">
+        <div className="sticky bottom-0 mt-auto flex items-center justify-end gap-3 border-t border-line bg-surface px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {tx.deletedAt ? (
-            <button onClick={onDelete} className="mr-auto text-sm font-medium text-accent hover:underline">
+            <button onClick={onDelete} className="mr-auto text-sm font-medium whitespace-nowrap text-accent hover:underline">
               Restaurar
             </button>
           ) : (
             <button
               onClick={() => confirm(`Apagar "${tx.description}"? Deixa de contar em todo o lado; podes restaurá-lo em "Apagados".`) && onDelete()}
-              className="mr-auto text-sm text-ink-3 hover:text-danger"
+              className="mr-auto text-sm whitespace-nowrap text-ink-3 hover:text-danger"
             >
-              Apagar movimento
+              Apagar
             </button>
           )}
-          {saved && !dirty && <span className="text-sm text-pos">Guardado ✓</span>}
-          <button onClick={onClose} className="h-10 px-3 text-sm text-ink-3 hover:text-ink">
+          {saved && !dirty && <span className="text-sm whitespace-nowrap text-pos">Guardado ✓</span>}
+          <button onClick={onClose} className="hidden h-10 px-3 text-sm text-ink-3 hover:text-ink sm:block">
             Fechar
           </button>
-          <button onClick={save} disabled={!dirty || pending} className="btn-primary">
-            {pending ? "A guardar…" : "Guardar nome e nota"}
+          <button onClick={save} disabled={!dirty || pending} className="btn-primary whitespace-nowrap">
+            {pending ? "A guardar…" : "Guardar"}
           </button>
         </div>
       </aside>

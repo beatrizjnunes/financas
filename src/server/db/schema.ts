@@ -11,6 +11,8 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   /** Nomes com que o banco identifica esta pessoa (JSON string[]), para detetar transferências. */
   bankNames: text("bank_names", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+  /** Foto de perfil como data URL JPEG pequena (256×256, reduzida no navegador). */
+  avatar: text("avatar"),
   createdAt: createdAt(),
 });
 

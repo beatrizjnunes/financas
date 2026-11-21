@@ -144,7 +144,7 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
                 categories={categories.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName }))}
               />
 
-              <dl className="mb-4 grid grid-cols-3 gap-3 lg:gap-4">
+              <dl className="mb-4 grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
                 <Total label="Entradas" value={formatEUR(income)} className="text-pos" />
                 <Total label="Saídas" value={formatEUR(spent)} />
                 <Total label="Saldo do período" value={formatEUR(income + spent, { sign: true })} />
@@ -185,9 +185,9 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
 
 function Total({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
-    <div className="card px-4 py-3 sm:px-5 sm:py-4">
-      <dt className="text-xs text-ink-3">{label}</dt>
-      <dd className={`num mt-1 text-base font-semibold sm:text-xl ${className}`}>{value}</dd>
+    <div className="card min-w-0 px-3 py-3 sm:px-5 sm:py-4">
+      <dt className="truncate text-xs text-ink-3">{label}</dt>
+      <dd className={`num mt-1 text-[13px] font-semibold tracking-tight break-words min-[400px]:text-base sm:text-xl ${className}`}>{value}</dd>
     </div>
   );
 }

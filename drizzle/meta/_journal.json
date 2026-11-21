@@ -57,6 +57,13 @@
       "when": 1795290649907,
       "tag": "0007_apagados",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795291343570,
+      "tag": "0008_foto_perfil",
+      "breakpoints": true
     }
   ]
 }

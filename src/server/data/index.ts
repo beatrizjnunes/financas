@@ -549,6 +549,16 @@ export async function setMyBudgets(userId: string, items: { categoryId: string; 
   }
 }
 
+export async function myAvatar(userId: string) {
+  const row = await db.select({ avatar: users.avatar }).from(users).where(eq(users.id, userId)).get();
+  return row?.avatar ?? null;
+}
+
+/** Guarda (ou apaga, com null) a foto de perfil do próprio. */
+export async function setMyAvatar(userId: string, dataUrl: string | null) {
+  await db.update(users).set({ avatar: dataUrl }).where(eq(users.id, userId)).run();
+}
+
 export async function listPeople() {
   return db
     .select({ id: users.id, name: users.displayName })

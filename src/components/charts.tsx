@@ -466,7 +466,10 @@ export function StatTile({
         <p className="num mt-1 truncate text-xl font-semibold tracking-tight sm:text-[26px]">{value}</p>
         {delta && (
           <p className="mt-1.5">
-            <span className={`chip ${accent ? "" : chip}`} style={accent ? { background: "color-mix(in srgb, var(--accent-ink) 14%, transparent)" } : undefined}>
+            <span
+              className={`chip rounded-[10px] py-0.5 leading-4 sm:rounded-full ${accent ? "" : chip}`}
+              style={accent ? { background: "color-mix(in srgb, var(--accent-ink) 14%, transparent)" } : undefined}
+            >
               {delta}
             </span>
           </p>

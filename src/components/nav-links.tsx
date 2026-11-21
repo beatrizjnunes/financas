@@ -2,20 +2,35 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Icon, type IconName } from "./icons";
+import { Icon, type IconName, Logo } from "./icons";
 
+// O Resumo não tem entrada própria: abre-se pelo logótipo (HomeLogo).
 const LINKS: { href: string; label: string; icon: IconName; mobile: boolean }[] = [
-  { href: "/", label: "Resumo", icon: "grid", mobile: true },
   { href: "/movimentos", label: "Movimentos", icon: "list", mobile: true },
+  { href: "/partilhado", label: "Partilhado", icon: "house", mobile: true },
   { href: "/analise", label: "Análise", icon: "chart", mobile: true },
   { href: "/orcamentos", label: "Orçamentos", icon: "target", mobile: true },
   { href: "/patrimonio", label: "Património", icon: "wallet", mobile: true },
-  { href: "/partilhado", label: "Partilhado", icon: "house", mobile: true },
 ];
 
+/** Logótipo que leva ao Resumo; fica destacado quando se está lá. */
+export function HomeLogo({ size = "size-8" }: { size?: string }) {
+  const active = usePathname() === "/";
+  return (
+    <Link
+      href="/"
+      aria-label="Resumo"
+      title="Resumo"
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center justify-center rounded-full p-1.5 transition ${active ? "bg-accent-soft" : "hover:bg-surface-2"}`}
+    >
+      <Logo className={size} />
+    </Link>
+  );
+}
+
 // Importar não tem entrada própria: abre-se pelo botão em Movimentos, que fica destacado.
-const isActive = (path: string, href: string) =>
-  href === "/" ? path === "/" : path.startsWith(href) || (href === "/movimentos" && path.startsWith("/importar"));
+const isActive = (path: string, href: string) => path.startsWith(href) || (href === "/movimentos" && path.startsWith("/importar"));
 
 function Badge({ n, className = "" }: { n: number; className?: string }) {
   return (
@@ -57,7 +72,7 @@ export function SideNav({ toReview }: { toReview: number }) {
 export function BottomNav({ toReview }: { toReview: number }) {
   const path = usePathname();
   return (
-    <nav className="grid grid-cols-6">
+    <nav className="grid grid-cols-5">
       {LINKS.filter((l) => l.mobile).map((l) => {
         const active = isActive(path, l.href);
         return (
