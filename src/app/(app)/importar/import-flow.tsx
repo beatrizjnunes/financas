@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { formatDate, formatEUR, formatTime } from "@/lib/format";
@@ -21,6 +22,16 @@ type Edit = { scope: Scope; kind: Kind; categoryId: string | null };
 
 const STEPS = ["Carregar", "Rever", "Confirmar"];
 
+/** Lê o CSV em UTF-8; se não for UTF-8 válido (ex.: Caixa, em Windows-1252), usa Windows-1252. */
+async function readText(f: File): Promise<string> {
+  const buf = await f.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buf);
+  }
+}
+
 export function ImportFlow({ accounts, categories }: { accounts: AccountOption[]; categories: CategoryOption[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -38,7 +49,7 @@ export function ImportFlow({ accounts, categories }: { accounts: AccountOption[]
       setError("Por agora só aceito ficheiros CSV.");
       return;
     }
-    const content = await f.text();
+    const content = await readText(f);
     setFile({ name: f.name, content });
     startTransition(async () => {
       const res = await previewAction(accountId, content);
@@ -80,9 +91,12 @@ export function ImportFlow({ accounts, categories }: { accounts: AccountOption[]
 
   return (
     <div>
+      <Link href="/movimentos" className="mb-3 inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink">
+        ← Movimentos
+      </Link>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Importar extrato</h1>
+          <h1 className="text-[26px] font-semibold tracking-tight sm:text-[28px]">Importar extrato</h1>
           <p className="mt-1 text-sm text-ink-3">
             {preview && account ? `${account.name} · ${file?.name}` : "Carrega o CSV exportado da app do banco."}
           </p>

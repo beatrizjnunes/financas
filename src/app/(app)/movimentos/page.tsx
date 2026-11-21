@@ -4,6 +4,7 @@ import { formatEUR, parseAmountToCents } from "@/lib/format";
 import { COUNTED_SCOPES, SCOPES, type Scope } from "@/lib/labels";
 import { requireUser } from "@/server/auth";
 import {
+  countDeleted,
   countSuspended,
   countToReview,
   hasAnyTransactions,
@@ -46,6 +47,7 @@ function readFilters(sp: Search): TxFilters {
     max: toCents(s("max")),
     review: s("rever") === "1",
     suspended: s("suspensos") === "1",
+    deleted: s("apagados") === "1",
   };
 }
 
@@ -53,13 +55,14 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
   const user = await requireUser();
   const sp = await searchParams;
   const filters = readFilters(sp);
-  const [accounts, categories, rows, hasAny, toReview, suspended] = await Promise.all([
+  const [accounts, categories, rows, hasAny, toReview, suspended, deletedCount] = await Promise.all([
     myAccounts(user.id),
     listCategories(),
     myTransactions(user.id, filters),
     hasAnyTransactions(user.id),
     countToReview(user.id),
     countSuspended(user.id),
+    countDeleted(user.id),
   ]);
   const imported = typeof sp.importados === "string" ? Number(sp.importados) : null;
 
@@ -124,25 +127,55 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
         />
       ) : (
         <>
-          <TxFiltersBar
-            accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
-            categories={categories.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName }))}
-          />
+          {filters.deleted ? (
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-danger-bg px-4 py-3 text-sm">
+              <p className="mr-auto">
+                <b className="font-medium">Movimentos apagados.</b>{" "}
+                <span className="text-ink-2">Não contam em nada, mas a app lembra-se deles para não os voltar a importar.</span>
+              </p>
+              <Link href="/movimentos" className="font-medium hover:underline">
+                ← Voltar aos movimentos
+              </Link>
+            </div>
+          ) : (
+            <>
+              <TxFiltersBar
+                accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+                categories={categories.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName }))}
+              />
 
-          <dl className="mb-4 grid grid-cols-3 gap-3 lg:gap-4">
-            <Total label="Entradas" value={formatEUR(income)} className="text-pos" />
-            <Total label="Saídas" value={formatEUR(spent)} />
-            <Total label="Saldo do período" value={formatEUR(income + spent, { sign: true })} />
-          </dl>
+              <dl className="mb-4 grid grid-cols-3 gap-3 lg:gap-4">
+                <Total label="Entradas" value={formatEUR(income)} className="text-pos" />
+                <Total label="Saídas" value={formatEUR(spent)} />
+                <Total label="Saldo do período" value={formatEUR(income + spent, { sign: true })} />
+              </dl>
+            </>
+          )}
 
           <TxList
+            key={filters.deleted ? "apagados" : "lista"}
             rows={rows}
             categories={categories.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName }))}
             showAccount={accounts.length > 1}
+            deletedView={!!filters.deleted}
           />
           <p className="mt-4 text-xs text-ink-3">
-            {rows.length} {rows.length === 1 ? "movimento" : "movimentos"}. Os totais só contam Pessoal e Partilhado — transferências,
-            movimentos ignorados e possíveis duplicados em suspenso ficam de fora.
+            {rows.length} {rows.length === 1 ? "movimento" : "movimentos"}.
+            {!filters.deleted && (
+              <>
+                {" "}
+                Os totais só contam Pessoal e Partilhado — transferências, movimentos ignorados, apagados e possíveis duplicados em
+                suspenso ficam de fora.
+                {deletedCount > 0 && (
+                  <>
+                    {" "}
+                    <Link href="/movimentos?apagados=1" className="font-medium text-ink-2 underline decoration-dotted underline-offset-2 hover:text-accent">
+                      Ver apagados ({deletedCount})
+                    </Link>
+                  </>
+                )}
+              </>
+            )}
           </p>
         </>
       )}

@@ -16,12 +16,15 @@ export function TxDetail({
   onClose,
   onPatch,
   onShared,
+  onDelete,
 }: {
   tx: TxRow;
   categories: CategoryOption[];
   onClose: () => void;
   onPatch: (p: { scope?: Scope; kind?: Kind; categoryId?: string | null }) => void;
   onShared: (cents: number | null) => void;
+  /** Apaga o movimento (ou restaura, se já estiver apagado). */
+  onDelete: () => void;
 }) {
   const [name, setName] = useState(tx.customDescription ?? tx.bankDescription);
   const [notes, setNotes] = useState(tx.notes ?? "");
@@ -154,6 +157,18 @@ export function TxDetail({
         </div>
 
         <div className="sticky bottom-0 mt-auto flex items-center justify-end gap-3 border-t border-line bg-surface px-6 py-4">
+          {tx.deletedAt ? (
+            <button onClick={onDelete} className="mr-auto text-sm font-medium text-accent hover:underline">
+              Restaurar
+            </button>
+          ) : (
+            <button
+              onClick={() => confirm(`Apagar "${tx.description}"? Deixa de contar em todo o lado; podes restaurá-lo em "Apagados".`) && onDelete()}
+              className="mr-auto text-sm text-ink-3 hover:text-danger"
+            >
+              Apagar movimento
+            </button>
+          )}
           {saved && !dirty && <span className="text-sm text-pos">Guardado ✓</span>}
           <button onClick={onClose} className="h-10 px-3 text-sm text-ink-3 hover:text-ink">
             Fechar

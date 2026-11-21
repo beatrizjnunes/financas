@@ -7,6 +7,8 @@ import { requireUser } from "@/server/auth";
 import {
   addMyManualTransaction,
   deleteMyManualTransaction,
+  deleteMyTransactions,
+  restoreMyTransactions,
   ensureCashAccount,
   markAllReviewed,
   resolveMyDuplicates,
@@ -43,6 +45,20 @@ export async function setSharedPartAction(input: unknown) {
   const saved = await setMySharedPart(user.id, id, cents);
   revalidatePath("/", "layout");
   return saved ?? null;
+}
+
+const Ids = z.array(z.string().min(1)).min(1).max(5000);
+
+export async function deleteTransactionsAction(ids: unknown) {
+  const user = await requireUser();
+  await deleteMyTransactions(user.id, Ids.parse(ids));
+  revalidatePath("/", "layout");
+}
+
+export async function restoreTransactionsAction(ids: unknown) {
+  const user = await requireUser();
+  await restoreMyTransactions(user.id, Ids.parse(ids));
+  revalidatePath("/", "layout");
 }
 
 const Details = z.object({

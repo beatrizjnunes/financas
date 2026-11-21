@@ -96,6 +96,11 @@ export const transactions = sqliteTable(
     /** Fica a true quando é importado; passa a false quando o dono o revê ou edita. */
     needsReview: integer("needs_review", { mode: "boolean" }).notNull().default(true),
     notes: text("notes"),
+    /**
+     * Apagado pelo dono: deixa de aparecer e de contar, mas a linha fica para a importação seguinte
+     * reconhecer o movimento (pelo hash) e não o voltar a criar. Pode ser restaurado.
+     */
+    deletedAt: text("deleted_at"),
     createdAt: createdAt(),
     updatedAt: text("updated_at"),
   },

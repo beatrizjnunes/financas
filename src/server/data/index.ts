@@ -74,6 +74,7 @@ export async function myDuplicateCandidates(
       .where(
         and(
           eq(transactions.ownerId, userId),
+          alive(),
           inArray(transactions.amountCents, unique.slice(i, i + 500)),
           gte(transactions.date, window.from),
           lte(transactions.date, window.to),
@@ -85,8 +86,11 @@ export async function myDuplicateCandidates(
   return out;
 }
 
-/** Só os movimentos que contam: Pessoal ou Casal, e que não estejam em suspenso por possível duplicado. */
-const counts = () => and(inArray(transactions.scope, ["pessoal", "casal"]), isNull(transactions.duplicateOf));
+/** Movimentos não apagados. (Os apagados só servem para a deduplicação das importações e para restaurar.) */
+const alive = () => isNull(transactions.deletedAt);
+
+/** Só os movimentos que contam: Pessoal ou Casal, não apagados e que não estejam em suspenso por possível duplicado. */
+const counts = () => and(inArray(transactions.scope, ["pessoal", "casal"]), isNull(transactions.duplicateOf), alive());
 
 export type TxFilters = {
   q?: string;
@@ -99,13 +103,15 @@ export type TxFilters = {
   max?: number;
   review?: boolean;
   suspended?: boolean;
+  /** true = mostrar só os apagados (para restaurar). */
+  deleted?: boolean;
 };
 
 const original = alias(transactions, "original");
 const originalAccount = alias(accounts, "original_account");
 
 export async function myTransactions(userId: string, f: TxFilters = {}) {
-  const where: (SQL | undefined)[] = [eq(transactions.ownerId, userId)];
+  const where: (SQL | undefined)[] = [eq(transactions.ownerId, userId), f.deleted ? isNotNull(transactions.deletedAt) : alive()];
   if (f.accountId) where.push(eq(transactions.accountId, f.accountId));
   if (f.categoryId === "sem") where.push(isNull(transactions.categoryId));
   else if (f.categoryId) where.push(eq(transactions.categoryId, f.categoryId));
@@ -151,6 +157,7 @@ export async function myTransactions(userId: string, f: TxFilters = {}) {
       originalAmountCents: transactions.originalAmountCents,
       originalCurrency: transactions.originalCurrency,
       updatedAt: transactions.updatedAt,
+      deletedAt: transactions.deletedAt,
       categoryId: transactions.categoryId,
       needsReview: transactions.needsReview,
       accountId: transactions.accountId,
@@ -255,9 +262,40 @@ export async function countSuspended(userId: string) {
   const row = await db
     .select({ n: count() })
     .from(transactions)
-    .where(and(eq(transactions.ownerId, userId), isNotNull(transactions.duplicateOf)))
+    .where(and(eq(transactions.ownerId, userId), alive(), isNotNull(transactions.duplicateOf)))
     .get();
   return row?.n ?? 0;
+}
+
+export async function countDeleted(userId: string) {
+  const row = await db
+    .select({ n: count() })
+    .from(transactions)
+    .where(and(eq(transactions.ownerId, userId), isNotNull(transactions.deletedAt)))
+    .get();
+  return row?.n ?? 0;
+}
+
+/** Apaga (esconde) movimentos do próprio. Continuam a impedir que a mesma linha volte a ser importada. */
+export async function deleteMyTransactions(userId: string, ids: string[]) {
+  if (!ids.length) return 0;
+  const now = new Date().toISOString();
+  const res = await db
+    .update(transactions)
+    .set({ deletedAt: now, needsReview: false, updatedAt: now })
+    .where(and(eq(transactions.ownerId, userId), inArray(transactions.id, ids), alive()))
+    .run();
+  return res.rowsAffected;
+}
+
+export async function restoreMyTransactions(userId: string, ids: string[]) {
+  if (!ids.length) return 0;
+  const res = await db
+    .update(transactions)
+    .set({ deletedAt: null, updatedAt: new Date().toISOString() })
+    .where(and(eq(transactions.ownerId, userId), inArray(transactions.id, ids)))
+    .run();
+  return res.rowsAffected;
 }
 
 export async function hasAnyTransactions(userId: string) {
@@ -277,7 +315,7 @@ export async function countToReview(userId: string) {
   const row = await db
     .select({ n: count() })
     .from(transactions)
-    .where(and(eq(transactions.ownerId, userId), eq(transactions.needsReview, true)))
+    .where(and(eq(transactions.ownerId, userId), alive(), eq(transactions.needsReview, true)))
     .get();
   return row?.n ?? 0;
 }
@@ -539,7 +577,7 @@ export async function coupleTransactions() {
     })
     .from(transactions)
     .leftJoin(categories, eq(categories.id, transactions.categoryId))
-    .where(and(eq(transactions.scope, "casal"), isNull(transactions.duplicateOf)))
+    .where(and(eq(transactions.scope, "casal"), isNull(transactions.duplicateOf), alive()))
     .orderBy(desc(transactions.date))
     .all();
   // amountCents passa a ser só a parte partilhada; o total original fica em fullAmountCents.

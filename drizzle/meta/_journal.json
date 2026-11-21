@@ -50,6 +50,13 @@
       "when": 1795289126316,
       "tag": "0006_nome_personalizado",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795290649907,
+      "tag": "0007_apagados",
+      "breakpoints": true
     }
   ]
 }

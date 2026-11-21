@@ -11,7 +11,14 @@ import {
   KindSelect,
   ScopeSelect,
 } from "@/components/tx-controls";
-import { deleteManualTransactionAction, resolveDuplicatesAction, setSharedPartAction, updateTransactionsAction } from "./actions";
+import {
+  deleteManualTransactionAction,
+  deleteTransactionsAction,
+  resolveDuplicatesAction,
+  restoreTransactionsAction,
+  setSharedPartAction,
+  updateTransactionsAction,
+} from "./actions";
 import { SharedPart } from "./shared-part";
 import { TxDetail } from "./tx-detail";
 import { Icon } from "@/components/icons";
@@ -37,6 +44,7 @@ export type TxRow = {
   originalAmountCents: number | null;
   originalCurrency: string | null;
   updatedAt: string | null;
+  deletedAt: string | null;
   categoryId: string | null;
   needsReview: boolean;
   accountName: string;
@@ -46,17 +54,71 @@ export type TxRow = {
 
 type Patch = Partial<Pick<TxRow, "scope" | "kind" | "categoryId" | "duplicateOf" | "sharedCents">> & { needsReview?: false };
 
-export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categories: CategoryOption[]; showAccount: boolean }) {
+export function TxList({
+  rows,
+  categories,
+  showAccount,
+  deletedView = false,
+}: {
+  rows: TxRow[];
+  categories: CategoryOption[];
+  showAccount: boolean;
+  /** Vista "Apagados": cada linha tem Restaurar (e Apagar de vez, se for manual). */
+  deletedView?: boolean;
+}) {
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [optimistic, apply] = useOptimistic(rows, (state, { ids, patch }: { ids: string[]; patch: Patch }) =>
-    state.map((r) =>
-      ids.includes(r.id)
-        ? { ...r, needsReview: false, ...(patch.scope && patch.scope !== "casal" ? { sharedCents: null } : {}), ...patch }
-        : r,
-    ),
+  const [undo, setUndo] = useState<string[] | null>(null);
+  const [optimistic, apply] = useOptimistic(rows, (state, { ids, patch, remove }: { ids: string[]; patch?: Patch; remove?: boolean }) =>
+    remove
+      ? state.filter((r) => !ids.includes(r.id))
+      : state.map((r) =>
+          ids.includes(r.id)
+            ? { ...r, needsReview: false, ...(patch?.scope && patch.scope !== "casal" ? { sharedCents: null } : {}), ...patch }
+            : r,
+        ),
+  );
+
+  /** Apaga (ou, na vista de apagados, restaura) e tira as linhas da lista logo. */
+  function removeRows(ids: string[], mode: "apagar" | "restaurar" | "purgar") {
+    setError(null);
+    setSelected(new Set());
+    setOpenId(null);
+    startTransition(async () => {
+      apply({ ids, remove: true });
+      try {
+        if (mode === "apagar") {
+          await deleteTransactionsAction(ids);
+          setUndo(ids);
+        } else if (mode === "restaurar") await restoreTransactionsAction(ids);
+        else await deleteManualTransactionAction(ids[0]);
+      } catch {
+        setError("Não consegui guardar a alteração. Tenta outra vez.");
+      }
+    });
+  }
+
+  const undoBar = undo && (
+    <div className="sticky top-16 z-10 mb-3 flex items-center gap-3 rounded-xl bg-ink px-4 py-2.5 text-sm text-bg shadow-lg">
+      <span className="mr-auto">
+        {undo.length} {undo.length === 1 ? "movimento apagado" : "movimentos apagados"}.
+      </span>
+      <button
+        onClick={() => {
+          const ids = undo;
+          setUndo(null);
+          startTransition(() => restoreTransactionsAction(ids));
+        }}
+        className="font-semibold underline underline-offset-2"
+      >
+        Desfazer
+      </button>
+      <button onClick={() => setUndo(null)} className="opacity-60 hover:opacity-100" aria-label="Fechar">
+        ✕
+      </button>
+    </div>
   );
 
   function updateShared(id: string, cents: number | null) {
@@ -97,8 +159,11 @@ export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categ
 
   if (!optimistic.length) {
     return (
-      <div className="card px-6 py-12 text-center text-sm text-ink-3">
-        Nenhum movimento com estes filtros.
+      <div>
+        {undoBar}
+        <div className="card px-6 py-12 text-center text-sm text-ink-3">
+          {deletedView ? "Não há movimentos apagados." : "Nenhum movimento com estes filtros."}
+        </div>
       </div>
     );
   }
@@ -130,18 +195,23 @@ export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categ
           onClose={() => setOpenId(null)}
           onPatch={(p) => update([openTx.id], p)}
           onShared={(c) => updateShared(openTx.id, c)}
+          onDelete={() => removeRows([openTx.id], openTx.deletedAt ? "restaurar" : "apagar")}
         />
       )}
+      {undoBar}
       {error && <p className="mb-3 rounded-xl bg-danger-bg px-4 py-2.5 text-sm text-danger">{error}</p>}
-      <BulkBar
-        count={selected.size}
-        categories={categories}
-        onScope={(scope) => update([...selected], { scope })}
-        onCategory={(categoryId) => update([...selected], { categoryId })}
-        onKind={(kind) => update([...selected], { kind })}
-        onReviewed={() => update([...selected], { needsReview: false })}
-        onClear={() => setSelected(new Set())}
-      />
+      {!deletedView && (
+        <BulkBar
+          count={selected.size}
+          categories={categories}
+          onScope={(scope) => update([...selected], { scope })}
+          onCategory={(categoryId) => update([...selected], { categoryId })}
+          onKind={(kind) => update([...selected], { kind })}
+          onReviewed={() => update([...selected], { needsReview: false })}
+          onDelete={() => confirm(`Apagar ${selected.size} ${selected.size === 1 ? "movimento" : "movimentos"}?`) && removeRows([...selected], "apagar")}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
       <div className="overflow-hidden card">
         {days.map(({ day, rows }) => {
           const net = rows
@@ -200,21 +270,28 @@ export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categ
                               ·{" "}
                             </>
                           )}
-                          {r.bankType === "manual" ? (
+                          {r.deletedAt && (
                             <>
-                              <span className="font-medium text-ink-2">Manual</span> ·{" "}
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Apagar "${r.description}"?`)) startTransition(() => deleteManualTransactionAction(r.id));
-                                }}
-                                className="hover:text-danger hover:underline"
-                              >
-                                apagar
+                              <span className="text-danger">Apagado a {formatDate(r.deletedAt)}</span> ·{" "}
+                              <button onClick={() => removeRows([r.id], "restaurar")} className="font-medium text-accent hover:underline">
+                                Restaurar
                               </button>
+                              {r.bankType === "manual" && (
+                                <>
+                                  {" "}
+                                  ·{" "}
+                                  <button
+                                    onClick={() => confirm(`Apagar "${r.description}" de vez? Não dá para desfazer.`) && removeRows([r.id], "purgar")}
+                                    className="hover:text-danger hover:underline"
+                                  >
+                                    Apagar de vez
+                                  </button>
+                                </>
+                              )}{" "}
+                              ·{" "}
                             </>
-                          ) : (
-                            formatTime(r.date)
                           )}
+                          {r.bankType === "manual" ? <span className="font-medium text-ink-2">Manual</span> : formatTime(r.date)}
                           {showAccount && <> · {r.accountName}</>}
                           {r.feeCents > 0 && r.amountCents !== -r.feeCents && <> · inclui comissão de {formatEUR(r.feeCents)}</>}
                         </p>

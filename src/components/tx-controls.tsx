@@ -108,6 +108,7 @@ export function BulkBar({
   onCategory,
   onKind,
   onReviewed,
+  onDelete,
   onClear,
 }: {
   count: number;
@@ -116,6 +117,7 @@ export function BulkBar({
   onCategory: (id: string | null) => void;
   onKind: (k: Kind) => void;
   onReviewed?: () => void;
+  onDelete?: () => void;
   onClear: () => void;
 }) {
   if (!count) return null;
@@ -155,6 +157,14 @@ export function BulkBar({
           className="flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 transition hover:border-line-strong hover:bg-surface-2"
         >
           ✓ Revisto
+        </button>
+      )}
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-danger transition hover:border-danger hover:bg-danger-bg"
+        >
+          Apagar
         </button>
       )}
       <button onClick={onClear} className="ml-auto px-2 text-ink-3 hover:text-ink">

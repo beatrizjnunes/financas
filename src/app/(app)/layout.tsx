@@ -39,9 +39,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Link>
         <span className="text-sm font-semibold tracking-tight">Finanças</span>
         <div className="ml-auto flex items-center gap-1">
-          <Link href="/importar" className="flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface" aria-label="Importar extrato">
-            <Icon name="upload" />
-          </Link>
           <form action={logoutAction}>
             <button className="flex size-9 items-center justify-center rounded-full text-ink-3 hover:bg-surface" aria-label="Sair">
               <Icon name="logout" />

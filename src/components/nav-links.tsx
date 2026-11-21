@@ -11,10 +11,11 @@ const LINKS: { href: string; label: string; icon: IconName; mobile: boolean }[] 
   { href: "/orcamentos", label: "Orçamentos", icon: "target", mobile: true },
   { href: "/patrimonio", label: "Património", icon: "wallet", mobile: true },
   { href: "/partilhado", label: "Partilhado", icon: "house", mobile: true },
-  { href: "/importar", label: "Importar", icon: "upload", mobile: false },
 ];
 
-const isActive = (path: string, href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+// Importar não tem entrada própria: abre-se pelo botão em Movimentos, que fica destacado.
+const isActive = (path: string, href: string) =>
+  href === "/" ? path === "/" : path.startsWith(href) || (href === "/movimentos" && path.startsWith("/importar"));
 
 function Badge({ n, className = "" }: { n: number; className?: string }) {
   return (
