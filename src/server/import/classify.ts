@@ -30,9 +30,12 @@ export function suggestScope(row: ParsedRow, people: People): Scope {
     if (matchesAny(row.counterparty, people.partnerNames)) return "entre_nos";
   }
   // Carregamento com cartão próprio (ex.: Apple Pay top-up a partir do cartão do ING).
-  if (row.bankType === "Topup" && /top-up by \*\d+/i.test(row.descriptionOriginal)) return "interna";
+  if (row.bankType === "Topup" && /(?:top-up by|Apple Pay através de) \*\d+/i.test(row.descriptionOriginal)) return "interna";
   // …e o mesmo carregamento visto do lado do ING ("Revolut**1552* Dublin IRL").
   if (row.amountCents < 0 && /^Revolut\*/i.test(row.descriptionOriginal)) return "interna";
+  // Dinheiro posto numa corretora/plataforma de investimento continua a ser teu (ver Património → Investimentos).
+  if (row.amountCents < 0 && /trading\s?212|degiro|go and grow|bondora|\bxtb\b|interactive brokers|lightyear/i.test(row.descriptionOriginal))
+    return "interna";
   // …e do lado da Caixa ("CAR WAL REVOLUT 6408").
   if (row.amountCents < 0 && /^CAR WAL REVOLUT\b/i.test(row.descriptionOriginal)) return "interna";
   // Albert Heijn: em dias úteis das 9h às 18h é o almoço/lanche de cada um; fora disso são compras da casa.
@@ -61,7 +64,7 @@ const KEYWORDS: [RegExp, string][] = [
   [/kruidvat|etos|sephora|douglas|apotheek|farm[aá]cia/i, "Saúde e beleza"],
   [/ikea|jysk|action|flying tiger|hema|pipoos|blokker|botanico|so ?low|^normal$/i, "Casa"],
   [/netflix|spotify|disney|youtube|icloud|apple\.com|patreon|openai|chatgpt/i, "Subscrições"],
-  [/amazon|bol\.com|coolblue|zalando|temu|shein/i, "Compras online"],
+  [/amazon|bol\.com|coolblue|zalando|temu|shein|fordeal|mediamarkt|worten|fnac/i, "Compras online"],
   [/ziggo|\bkpn\b|odido|vodafone|lebara/i, "Internet e telemóvel"],
   [/evides|waterbedrijf|vattenfall|eneco|essent|greenchoice/i, "Contas da casa"],
 ];

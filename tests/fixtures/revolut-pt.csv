@@ -1,0 +1,24 @@
+Tipo,Produto,Data de início,Data de Conclusão,Descrição,Montante,Comissão,Moeda,Estado,Saldo
+Carregamento,Atual,2026-08-02 20:23:28,2026-08-02 20:23:30,Carregamento com Apple Pay através de *0000,34.00,0.00,EUR,CONCLUÍDA,35.30
+Pagamento com cartão,Atual,2026-08-02 20:24:09,2026-08-03 03:15:12,fordeal.com,-34.97,0.00,EUR,CONCLUÍDA,0.33
+Transferência,Atual,2026-08-04 21:00:54,2026-08-04 21:00:55,Transferência imediata intrabancária de PESSOA IVO EXEMPLO,210.00,0.00,EUR,CONCLUÍDA,210.33
+Transferência,Atual,2026-08-05 00:09:37,2026-08-05 00:09:39,Transferência imediata SEPA+ para Pessoa Bea,-210.00,0.00,EUR,CONCLUÍDA,0.33
+Carregamento,Atual,2026-08-14 11:19:56,2026-08-14 11:19:57,Carregamento de PESSOA FAMILIA,3000.00,0.00,EUR,CONCLUÍDA,3000.33
+Transferência,Atual,2026-08-14 13:09:22,2026-08-14 13:50:53,Transferência a crédito SEPA+ para Youfone Nederland B.V.,-0.01,0.00,EUR,CONCLUÍDA,3000.32
+Pagamento com cartão,Atual,2026-08-14 11:49:01,2026-08-14 16:00:08,Benelux Hotel Exploita,-72.00,0.00,EUR,CONCLUÍDA,2928.32
+Transferência,Atual,2026-08-24 11:37:20,2026-08-24 11:37:22,Transferência imediata SEPA+ para Go And Grow OU,-10.00,0.00,EUR,CONCLUÍDA,2918.32
+Transferência,Atual,2026-08-26 09:30:19,2026-08-26 10:35:05,Transferência a crédito SEPA+ para NS Reizigers B.V.,-3.70,0.00,EUR,CONCLUÍDA,2914.62
+Pagamento com cartão,Atual,2026-08-29 16:27:08,2026-08-30 10:06:28,Albert Heijn,-2.65,0.00,EUR,CONCLUÍDA,2911.97
+Transferência,Atual,2026-09-04 02:00:00,2026-09-04 13:08:09,SEPA+ credit transfer,-80.57,0.00,EUR,CONCLUÍDA,2831.40
+Transferência,Atual,2026-09-08 19:39:10,2026-09-08 19:39:11,Transferência imediata intrabancária para PESSOA IVO EXEMPLO,-130.00,0.00,EUR,CONCLUÍDA,2701.40
+Carregamento,Atual,2026-09-23 19:57:57,2026-09-23 19:57:58,Carregamento de EMPRESA EXEMPLO BV,2985.50,0.00,EUR,CONCLUÍDA,5686.90
+Transferência,Atual,2026-09-28 19:30:34,2026-09-29 02:51:03,Transferência a crédito SEPA+ para Transavia Airlines C.V.,-88.00,0.00,EUR,CONCLUÍDA,5598.90
+Pagamento com cartão,Atual,2026-09-28 19:56:34,2026-10-01 10:11:06,KLM Royal Dutch Airlines,-225.48,0.00,EUR,CONCLUÍDA,5373.42
+Cobrança,Atual,2026-10-12 23:56:29,2026-10-12 23:56:29,Comissão por emissão de cartão,0.00,20.79,EUR,CONCLUÍDA,5352.63
+Transferência,Atual,2026-10-22 15:41:25,2026-10-23 02:56:27,Transferência a crédito SEPA+ para My Way via Stichting Mollie Payments,-43.20,0.00,EUR,CONCLUÍDA,5309.43
+Pagamento Revolut,Atual,2026-11-03 20:36:26,2026-11-03 20:36:29,Swapfiets*London,-23.90,0.00,EUR,CONCLUÍDA,5285.53
+Pagamento com cartão,Atual,2026-11-09 20:11:47,2026-11-10 10:49:26,MediaMarkt,-264.00,0.00,EUR,CONCLUÍDA,5021.53
+Devolução do cartão de débito,Atual,2026-11-19 18:32:05,2026-11-20 12:05:16,MediaMarkt,264.00,0.00,EUR,CONCLUÍDA,5285.53
+Pagamento com cartão,Atual,2026-11-20 23:59:00,,Amazon,-37.37,0.00,EUR,PENDENTE,
+Pagamento com cartão,Atual,2026-11-20 20:23:23,2026-11-21 10:53:24,Lidl,-66.26,0.00,EUR,CONCLUÍDA,5219.27
+Pagamento com cartão,Atual,2026-11-21 21:01:25,,Trading 212,-300.00,0.00,EUR,PENDENTE,
