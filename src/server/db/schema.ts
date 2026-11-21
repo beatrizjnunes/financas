@@ -24,10 +24,14 @@ export const sessions = sqliteTable("sessions", {
 export const accounts = sqliteTable("accounts", {
   id: id(),
   ownerId: text("owner_id").notNull().references(() => users.id),
-  bank: text("bank", { enum: ["ing", "revolut", "caixa"] }).notNull(),
+  /** "dinheiro" = carteira, para despesas pagas em notas (só movimentos manuais). */
+  bank: text("bank", { enum: ["ing", "revolut", "caixa", "dinheiro"] }).notNull(),
   name: text("name").notNull(),
   type: text("type", { enum: ["corrente", "poupanca", "cartao"] }).notNull().default("corrente"),
   currency: text("currency").notNull().default("EUR"),
+  /** Saldo escrito à mão (vale mais do que o do extrato se for mais recente). */
+  manualBalanceCents: integer("manual_balance_cents"),
+  manualBalanceDate: text("manual_balance_date"),
   createdAt: createdAt(),
 });
 
@@ -63,6 +67,8 @@ export const transactions = sqliteTable(
     bookedAt: text("booked_at"),
     descriptionOriginal: text("description_original").notNull(),
     description: text("description").notNull(),
+    /** Nome dado pelo utilizador (null = usar `description`). O nome do banco fica sempre guardado. */
+    customDescription: text("custom_description"),
     counterparty: text("counterparty"),
     bankType: text("bank_type"),
     /** Valor líquido em cêntimos de EUR (já com comissões descontadas). */
@@ -76,6 +82,11 @@ export const transactions = sqliteTable(
       .notNull()
       .default("pessoal"),
     kind: text("kind", { enum: ["fixa", "variavel", "pontual"] }).notNull().default("variavel"),
+    /**
+     * Parte partilhada (cêntimos, positivo) quando só uma parte de um movimento Partilhado é da casa.
+     * null = o valor todo. O resto conta como pessoal de quem pagou.
+     */
+    sharedCents: integer("shared_cents"),
     hash: text("hash").notNull(),
     /**
      * Possível duplicado de outro movimento (mesmo valor, mesma hora). Enquanto estiver preenchido
@@ -106,6 +117,33 @@ export const budgets = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.categoryId] })],
 );
+
+/** Investimentos pessoais (ações, ETF, PPR, cripto…). Valores atualizados à mão. */
+export const investments = sqliteTable("investments", {
+  id: id(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type", { enum: ["acoes", "etf", "ppr", "cripto", "deposito", "outro"] }).notNull().default("outro"),
+  /** Total que lá se pôs (custo). */
+  investedCents: integer("invested_cents").notNull(),
+  /** Quanto vale hoje. */
+  valueCents: integer("value_cents").notNull(),
+  updatedAt: text("updated_at"),
+  createdAt: createdAt(),
+});
+
+/** Objetivos de poupança (férias, fundo de emergência, carro…). */
+export const goals = sqliteTable("goals", {
+  id: id(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  targetCents: integer("target_cents").notNull(),
+  savedCents: integer("saved_cents").notNull().default(0),
+  /** "AAAA-MM" opcional: até quando. */
+  targetMonth: text("target_month"),
+  updatedAt: text("updated_at"),
+  createdAt: createdAt(),
+});
 
 export type User = typeof users.$inferSelect;
 export type Account = typeof accounts.$inferSelect;

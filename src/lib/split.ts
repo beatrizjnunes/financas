@@ -1,6 +1,25 @@
 // Contas do casal. Tudo em cêntimos inteiros: nunca se perde nem se cria um cêntimo.
 
 export type CoupleTx = { paidBy: string; amountCents: number };
+
+/**
+ * Valor que conta como partilhado (com o sinal do movimento). `sharedCents` null = tudo.
+ * Nunca passa do valor do movimento.
+ */
+export function sharedAmount(amountCents: number, sharedCents: number | null): number {
+  if (sharedCents == null) return amountCents;
+  const part = Math.min(Math.abs(sharedCents), Math.abs(amountCents));
+  return amountCents < 0 ? -part : part;
+}
+
+/**
+ * Normaliza a parte partilhada que o utilizador escreveu: null (= tudo) se for vazia, ≤ 0 ou ≥ o valor
+ * do movimento; senão os cêntimos, positivos.
+ */
+export function normalizeShared(amountCents: number, cents: number | null): number | null {
+  if (cents == null || cents <= 0 || cents >= Math.abs(amountCents)) return null;
+  return Math.round(cents);
+}
 export type Person = { id: string; name: string };
 
 export type PersonBalance = {

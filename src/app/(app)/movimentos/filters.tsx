@@ -71,7 +71,7 @@ export function TxFiltersBar({ accounts, categories }: { accounts: { id: string;
       </select>
       <select {...sel("ambito")} className="select h-9 w-40" aria-label="Âmbito">
         <option value="">Todos os âmbitos</option>
-        <option value="contam">Pessoal + Casal</option>
+        <option value="contam">Pessoal + Partilhado</option>
         {SCOPES.map((s) => (
           <option key={s} value={s}>
             {SCOPE_LABEL[s]}

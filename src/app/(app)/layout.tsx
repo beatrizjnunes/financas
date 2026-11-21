@@ -4,10 +4,12 @@ import { countToReview } from "@/server/data";
 import { logoutAction } from "./actions";
 import { BottomNav, SideNav } from "@/components/nav-links";
 import { Icon, Logo } from "@/components/icons";
+import { DemoBanner } from "@/components/demo-banner";
+import { hasDemo } from "@/server/demo";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const toReview = await countToReview(user.id);
+  const [toReview, demo] = await Promise.all([countToReview(user.id), hasDemo()]);
   const initial = user.displayName.slice(0, 1).toUpperCase();
 
   return (
@@ -48,7 +50,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl min-w-0 px-4 pt-4 pb-28 sm:px-6 lg:px-1 lg:pt-3 lg:pb-10">{children}</main>
+      <main className="mx-auto w-full max-w-6xl min-w-0 px-4 pt-4 pb-28 sm:px-6 lg:px-1 lg:pt-3 lg:pb-10">
+        {demo && <DemoBanner />}
+        {children}
+      </main>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
         <BottomNav toReview={toReview} />

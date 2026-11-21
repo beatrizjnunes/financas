@@ -1,13 +1,17 @@
 import "server-only";
 // Camada de acesso a dados. Regra de privacidade: TODAS as funções recebem o userId
 // da sessão e filtram por dono. As páginas nunca consultam a BD diretamente.
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lte, or, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lte, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { Kind, Scope } from "@/lib/labels";
+import { normalizeShared, sharedAmount } from "@/lib/split";
 import type { DuplicateCandidate } from "../import/duplicates";
 import { db, schema } from "../db";
 
-const { accounts, budgets, categories, transactions, users } = schema;
+const { accounts, budgets, categories, goals, investments, transactions, users } = schema;
+
+/** Nome a mostrar: o que o utilizador escreveu, senão o do banco (já limpo). */
+const displayName = sql<string>`coalesce(${transactions.customDescription}, ${transactions.description})`;
 
 export async function myAccounts(userId: string) {
   return db.select().from(accounts).where(eq(accounts.ownerId, userId)).orderBy(asc(accounts.bank)).all();
@@ -62,7 +66,7 @@ export async function myDuplicateCandidates(
         id: transactions.id,
         date: transactions.date,
         amountCents: transactions.amountCents,
-        description: transactions.description,
+        description: displayName,
         accountName: accounts.name,
       })
       .from(transactions)
@@ -116,19 +120,37 @@ export async function myTransactions(userId: string, f: TxFilters = {}) {
   if (f.suspended) where.push(isNotNull(transactions.duplicateOf));
   if (f.q) {
     const q = `%${f.q.trim()}%`;
-    where.push(or(like(transactions.description, q), like(transactions.descriptionOriginal, q), like(transactions.notes, q)));
+    where.push(
+      or(
+        like(transactions.description, q),
+        like(transactions.customDescription, q),
+        like(transactions.descriptionOriginal, q),
+        like(transactions.notes, q),
+      ),
+    );
   }
 
   return db
     .select({
       id: transactions.id,
       date: transactions.date,
-      description: transactions.description,
+      description: displayName,
       descriptionOriginal: transactions.descriptionOriginal,
       amountCents: transactions.amountCents,
       feeCents: transactions.feeCents,
       scope: transactions.scope,
       kind: transactions.kind,
+      sharedCents: transactions.sharedCents,
+      bankType: transactions.bankType,
+      bankDescription: transactions.description,
+      customDescription: transactions.customDescription,
+      notes: transactions.notes,
+      balanceCents: transactions.balanceCents,
+      bookedAt: transactions.bookedAt,
+      counterparty: transactions.counterparty,
+      originalAmountCents: transactions.originalAmountCents,
+      originalCurrency: transactions.originalCurrency,
+      updatedAt: transactions.updatedAt,
       categoryId: transactions.categoryId,
       needsReview: transactions.needsReview,
       accountId: transactions.accountId,
@@ -158,12 +180,57 @@ export type TxPatch = { scope?: Scope; kind?: Kind; categoryId?: string | null; 
  */
 export async function updateMyTransactions(userId: string, ids: string[], patch: TxPatch) {
   if (!ids.length) return 0;
+  // Ao deixar de ser Partilhado, a divisão deixa de fazer sentido.
+  const extra = patch.scope && patch.scope !== "casal" ? { sharedCents: null } : {};
   const res = await db
     .update(transactions)
-    .set({ needsReview: false, ...patch, updatedAt: new Date().toISOString() })
+    .set({ needsReview: false, ...patch, ...extra, updatedAt: new Date().toISOString() })
     .where(and(eq(transactions.ownerId, userId), inArray(transactions.id, ids)))
     .run();
   return res.rowsAffected;
+}
+
+/**
+ * Muda o nome a mostrar e a nota de um movimento do próprio. Nome vazio ou igual ao do banco = volta
+ * ao do banco (o original nunca é apagado).
+ */
+export async function updateMyTxDetails(userId: string, id: string, d: { name: string | null; notes: string | null }) {
+  const row = await db
+    .select({ description: transactions.description })
+    .from(transactions)
+    .where(and(eq(transactions.id, id), eq(transactions.ownerId, userId)))
+    .get();
+  if (!row) return;
+  const name = d.name?.trim() || null;
+  await db
+    .update(transactions)
+    .set({
+      customDescription: name && name !== row.description ? name : null,
+      notes: d.notes?.trim() || null,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(and(eq(transactions.id, id), eq(transactions.ownerId, userId)))
+    .run();
+}
+
+/**
+ * Define quanto de um movimento Partilhado é mesmo da casa (o resto fica pessoal).
+ * Só o dono o pode fazer e só em movimentos Partilhados. Devolve o valor guardado (null = tudo).
+ */
+export async function setMySharedPart(userId: string, id: string, cents: number | null) {
+  const row = await db
+    .select({ amountCents: transactions.amountCents, scope: transactions.scope })
+    .from(transactions)
+    .where(and(eq(transactions.id, id), eq(transactions.ownerId, userId)))
+    .get();
+  if (!row || row.scope !== "casal") return undefined;
+  const sharedCents = normalizeShared(row.amountCents, cents);
+  await db
+    .update(transactions)
+    .set({ sharedCents, needsReview: false, updatedAt: new Date().toISOString() })
+    .where(and(eq(transactions.id, id), eq(transactions.ownerId, userId)))
+    .run();
+  return sharedCents;
 }
 
 /**
@@ -221,7 +288,7 @@ export async function myCountedTransactions(userId: string) {
     .select({
       date: transactions.date,
       amountCents: transactions.amountCents,
-      description: transactions.description,
+      description: displayName,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
       kind: transactions.kind,
@@ -240,7 +307,7 @@ export async function myRecentTransactions(userId: string, limit = 6) {
     .select({
       id: transactions.id,
       date: transactions.date,
-      description: transactions.description,
+      description: displayName,
       amountCents: transactions.amountCents,
       categoryName: categories.name,
       scope: transactions.scope,
@@ -253,10 +320,24 @@ export async function myRecentTransactions(userId: string, limit = 6) {
     .all();
 }
 
-/** Saldo mais recente de cada conta do utilizador, tirado da última linha do extrato com saldo. */
-export async function myBalances(userId: string) {
+export type AccountBalance = {
+  accountId: string;
+  name: string;
+  bank: string;
+  balanceCents: number | null;
+  date: string | null;
+  source: "manual" | "extrato" | null;
+  statementCents: number | null;
+  statementDate: string | null;
+};
+
+/**
+ * Saldo atual de cada conta: o escrito à mão, se for mais recente do que o último extrato;
+ * senão o saldo da última linha do extrato.
+ */
+export async function myBalances(userId: string): Promise<AccountBalance[]> {
   const accs = await myAccounts(userId);
-  const out: { accountId: string; name: string; balanceCents: number; date: string }[] = [];
+  const out: AccountBalance[] = [];
   for (const a of accs) {
     const row = await db
       .select({ balanceCents: transactions.balanceCents, date: transactions.date })
@@ -265,9 +346,133 @@ export async function myBalances(userId: string) {
       .orderBy(desc(transactions.date), desc(transactions.createdAt))
       .limit(1)
       .get();
-    if (row?.balanceCents != null) out.push({ accountId: a.id, name: a.name, balanceCents: row.balanceCents, date: row.date });
+    const st = row?.balanceCents != null ? { cents: row.balanceCents, date: row.date } : null;
+    const manual = a.manualBalanceCents != null && a.manualBalanceDate ? { cents: a.manualBalanceCents, date: a.manualBalanceDate } : null;
+    const useManual = manual && (!st || manual.date >= st.date.slice(0, 10));
+    const pick = useManual ? manual : st;
+    out.push({
+      accountId: a.id,
+      name: a.name,
+      bank: a.bank,
+      balanceCents: pick?.cents ?? null,
+      date: pick?.date ?? null,
+      source: useManual ? "manual" : st ? "extrato" : null,
+      statementCents: st?.cents ?? null,
+      statementDate: st?.date ?? null,
+    });
   }
   return out;
+}
+
+/** Escreve (ou apaga, com null) o saldo atual de uma conta do próprio, com a data de hoje. */
+export async function setMyAccountBalance(userId: string, accountId: string, cents: number | null, today: string) {
+  await db
+    .update(accounts)
+    .set({ manualBalanceCents: cents, manualBalanceDate: cents == null ? null : today })
+    .where(and(eq(accounts.id, accountId), eq(accounts.ownerId, userId)))
+    .run();
+}
+
+/** Conta "Dinheiro" (carteira) do utilizador, criada na primeira vez que é precisa. */
+export async function ensureCashAccount(userId: string) {
+  const found = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.ownerId, userId), eq(accounts.bank, "dinheiro")))
+    .get();
+  if (found) return found.id;
+  const [row] = await db.insert(accounts).values({ ownerId: userId, bank: "dinheiro", name: "Dinheiro" }).returning({ id: accounts.id });
+  return row.id;
+}
+
+export type ManualTx = {
+  accountId: string;
+  date: string;
+  description: string;
+  amountCents: number;
+  categoryId: string | null;
+  scope: Scope;
+  kind: Kind;
+  sharedCents: number | null;
+};
+
+/** Movimento escrito à mão (ex.: pago em dinheiro). Só em contas do próprio. */
+export async function addMyManualTransaction(userId: string, t: ManualTx) {
+  const acc = await myAccount(userId, t.accountId);
+  if (!acc) throw new Error("Conta desconhecida");
+  await db
+    .insert(transactions)
+    .values({
+      ownerId: userId,
+      accountId: acc.id,
+      date: t.date,
+      descriptionOriginal: t.description,
+      description: t.description,
+      bankType: "manual",
+      amountCents: t.amountCents,
+      categoryId: t.categoryId,
+      scope: t.scope,
+      kind: t.kind,
+      sharedCents: t.scope === "casal" ? normalizeShared(t.amountCents, t.sharedCents) : null,
+      hash: `manual-${crypto.randomUUID()}`,
+      needsReview: false,
+    })
+    .run();
+}
+
+/** Apaga um movimento manual do próprio (os importados não se apagam, para não voltarem na próxima importação). */
+export async function deleteMyManualTransaction(userId: string, id: string) {
+  await db
+    .delete(transactions)
+    .where(and(eq(transactions.id, id), eq(transactions.ownerId, userId), eq(transactions.bankType, "manual")))
+    .run();
+}
+
+/* ---------- investimentos e objetivos ---------- */
+
+export async function myInvestments(userId: string) {
+  return db.select().from(investments).where(eq(investments.userId, userId)).orderBy(desc(investments.valueCents)).all();
+}
+
+export type InvestmentInput = { id?: string; name: string; type: (typeof investments.$inferInsert)["type"]; investedCents: number; valueCents: number };
+
+export async function saveMyInvestment(userId: string, i: InvestmentInput) {
+  const now = new Date().toISOString();
+  const values = { name: i.name, type: i.type, investedCents: i.investedCents, valueCents: i.valueCents, updatedAt: now };
+  if (i.id) await db.update(investments).set(values).where(and(eq(investments.id, i.id), eq(investments.userId, userId))).run();
+  else await db.insert(investments).values({ userId, ...values }).run();
+}
+
+export async function deleteMyInvestment(userId: string, id: string) {
+  await db.delete(investments).where(and(eq(investments.id, id), eq(investments.userId, userId))).run();
+}
+
+export async function myGoals(userId: string) {
+  return db.select().from(goals).where(eq(goals.userId, userId)).orderBy(asc(goals.createdAt)).all();
+}
+
+export type GoalInput = { id?: string; name: string; targetCents: number; savedCents: number; targetMonth: string | null };
+
+export async function saveMyGoal(userId: string, g: GoalInput) {
+  const now = new Date().toISOString();
+  const values = { name: g.name, targetCents: g.targetCents, savedCents: g.savedCents, targetMonth: g.targetMonth, updatedAt: now };
+  if (g.id) await db.update(goals).set(values).where(and(eq(goals.id, g.id), eq(goals.userId, userId))).run();
+  else await db.insert(goals).values({ userId, ...values }).run();
+}
+
+/** Soma (ou tira, se negativo) um valor ao que já está poupado; nunca fica abaixo de zero. */
+export async function addToMyGoal(userId: string, id: string, cents: number) {
+  const g = await db.select().from(goals).where(and(eq(goals.id, id), eq(goals.userId, userId))).get();
+  if (!g) return;
+  await db
+    .update(goals)
+    .set({ savedCents: Math.max(0, g.savedCents + cents), updatedAt: new Date().toISOString() })
+    .where(eq(goals.id, id))
+    .run();
+}
+
+export async function deleteMyGoal(userId: string, id: string) {
+  await db.delete(goals).where(and(eq(goals.id, id), eq(goals.userId, userId))).run();
 }
 
 export async function myBudgets(userId: string): Promise<Map<string, number>> {
@@ -320,15 +525,16 @@ export async function listPeople() {
  * por possível duplicado ficam de fora até o dono os confirmar.
  */
 export async function coupleTransactions() {
-  return db
+  const rows = await db
     .select({
       id: transactions.id,
       date: transactions.date,
-      description: transactions.description,
+      description: displayName,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
       kind: transactions.kind,
       amountCents: transactions.amountCents,
+      sharedCents: transactions.sharedCents,
       paidBy: transactions.ownerId,
     })
     .from(transactions)
@@ -336,4 +542,11 @@ export async function coupleTransactions() {
     .where(and(eq(transactions.scope, "casal"), isNull(transactions.duplicateOf)))
     .orderBy(desc(transactions.date))
     .all();
+  // amountCents passa a ser só a parte partilhada; o total original fica em fullAmountCents.
+  return rows.map(({ sharedCents, ...r }) => ({
+    ...r,
+    amountCents: sharedAmount(r.amountCents, sharedCents),
+    fullAmountCents: r.amountCents,
+    partial: sharedCents != null,
+  }));
 }

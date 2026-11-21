@@ -299,11 +299,14 @@ const median = (xs: number[]) => {
  * Olha para os 6 meses até `month`: o comerciante tem de aparecer em ≥ 3 meses, no máximo ~1 vez por mês,
  * com ≥ 75% dos meses a ±25% da mediana, e ainda estar ativo (visto neste mês ou no anterior).
  */
+/** Categorias de compras do dia a dia: um supermercado ir 1×/mês com valores parecidos não é uma subscrição. */
+const NOT_RECURRING = new Set(["Supermercado", "Restaurantes", "Cafés e snacks", "Transferências"]);
+
 export function recurringExpenses(txs: ATx[], month: string): Recurring[] {
   const window = new Set([...monthsBefore(month, 5), month]);
   const groups = new Map<string, { name: string; cat: string | null; byMonth: Map<string, number>; count: number; last: string }>();
   for (const t of txs) {
-    if (t.amountCents >= 0) continue;
+    if (t.amountCents >= 0 || (t.categoryName && NOT_RECURRING.has(t.categoryName))) continue;
     const m = monthOf(t.date);
     if (!window.has(m)) continue;
     const key = merchantKey(t.description);
@@ -329,6 +332,25 @@ export function recurringExpenses(txs: ATx[], month: string): Recurring[] {
     out.push({ key, name: g.name, categoryName: g.cat, monthlyCents: med, annualCents: med * 12, months: vals.length, lastDate: g.last });
   }
   return out.sort((a, b) => b.monthlyCents - a.monthlyCents);
+}
+
+/** N.º de meses de `from` até `to` (ex.: 2026-11 → 2027-06 = 7). */
+export function monthsBetween(from: string, to: string): number {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
+export type GoalPlan = { ratio: number; remainingCents: number; monthsLeft: number | null; perMonthCents: number | null; done: boolean; late: boolean };
+
+/** Progresso de um objetivo e quanto falta poupar por mês para chegar a tempo. */
+export function goalPlan(g: { targetCents: number; savedCents: number; targetMonth: string | null }, currentMonth: string): GoalPlan {
+  const remainingCents = Math.max(0, g.targetCents - g.savedCents);
+  const done = remainingCents === 0;
+  const monthsLeft = g.targetMonth ? monthsBetween(currentMonth, g.targetMonth) : null;
+  const late = !done && monthsLeft != null && monthsLeft <= 0;
+  const perMonthCents = done || monthsLeft == null ? null : Math.ceil(remainingCents / Math.max(monthsLeft, 1));
+  return { ratio: g.targetCents > 0 ? Math.min(g.savedCents / g.targetCents, 1) : 0, remainingCents, monthsLeft, perMonthCents, done, late };
 }
 
 /** Se `month` é o mês corrente, devolve o dia de hoje e o n.º de dias do mês; senão null (mês fechado). */

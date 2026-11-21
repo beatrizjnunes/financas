@@ -11,7 +11,10 @@ import {
   KindSelect,
   ScopeSelect,
 } from "@/components/tx-controls";
-import { resolveDuplicatesAction, updateTransactionsAction } from "./actions";
+import { deleteManualTransactionAction, resolveDuplicatesAction, setSharedPartAction, updateTransactionsAction } from "./actions";
+import { SharedPart } from "./shared-part";
+import { TxDetail } from "./tx-detail";
+import { Icon } from "@/components/icons";
 
 export type TxRow = {
   id: string;
@@ -22,6 +25,18 @@ export type TxRow = {
   feeCents: number;
   scope: Scope;
   kind: Kind;
+  sharedCents: number | null;
+  bankType: string | null;
+  bank: string;
+  bankDescription: string;
+  customDescription: string | null;
+  notes: string | null;
+  balanceCents: number | null;
+  bookedAt: string | null;
+  counterparty: string | null;
+  originalAmountCents: number | null;
+  originalCurrency: string | null;
+  updatedAt: string | null;
   categoryId: string | null;
   needsReview: boolean;
   accountName: string;
@@ -29,15 +44,32 @@ export type TxRow = {
   original: { date: string | null; description: string | null; accountName: string | null } | null;
 };
 
-type Patch = Partial<Pick<TxRow, "scope" | "kind" | "categoryId" | "duplicateOf">> & { needsReview?: false };
+type Patch = Partial<Pick<TxRow, "scope" | "kind" | "categoryId" | "duplicateOf" | "sharedCents">> & { needsReview?: false };
 
 export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categories: CategoryOption[]; showAccount: boolean }) {
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [optimistic, apply] = useOptimistic(rows, (state, { ids, patch }: { ids: string[]; patch: Patch }) =>
-    state.map((r) => (ids.includes(r.id) ? { ...r, needsReview: false, ...patch } : r)),
+    state.map((r) =>
+      ids.includes(r.id)
+        ? { ...r, needsReview: false, ...(patch.scope && patch.scope !== "casal" ? { sharedCents: null } : {}), ...patch }
+        : r,
+    ),
   );
+
+  function updateShared(id: string, cents: number | null) {
+    setError(null);
+    startTransition(async () => {
+      apply({ ids: [id], patch: { sharedCents: cents } });
+      try {
+        await setSharedPartAction({ id, cents });
+      } catch {
+        setError("Não consegui guardar a divisão. Tenta outra vez.");
+      }
+    });
+  }
 
   function update(ids: string[], patch: Patch) {
     setError(null);
@@ -86,8 +118,20 @@ export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categ
       return next;
     });
 
+  const openTx = openId ? optimistic.find((r) => r.id === openId) : undefined;
+
   return (
     <div>
+      {openTx && (
+        <TxDetail
+          key={openTx.id}
+          tx={openTx}
+          categories={categories}
+          onClose={() => setOpenId(null)}
+          onPatch={(p) => update([openTx.id], p)}
+          onShared={(c) => updateShared(openTx.id, c)}
+        />
+      )}
       {error && <p className="mb-3 rounded-xl bg-danger-bg px-4 py-2.5 text-sm text-danger">{error}</p>}
       <BulkBar
         count={selected.size}
@@ -133,9 +177,16 @@ export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categ
                         aria-label={`Selecionar ${r.description}`}
                       />
                       <div className="c-desc">
-                        <p className={`truncate text-sm font-medium ${counted ? "" : "text-ink-3"}`} title={r.descriptionOriginal}>
-                          {r.description}
-                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setOpenId(r.id)}
+                          className={`flex max-w-full items-center gap-1.5 text-left text-sm font-medium hover:text-accent ${counted ? "" : "text-ink-3"}`}
+                          title="Ver detalhes"
+                        >
+                          <span className="truncate">{r.description}</span>
+                          {r.customDescription && <Icon name="pencil" className="size-3 shrink-0 text-warn" />}
+                          {r.notes && <span className="shrink-0 text-xs text-ink-3" aria-label="Tem nota">📝</span>}
+                        </button>
                         <p className="truncate text-xs text-ink-3">
                           {r.needsReview && (
                             <>
@@ -149,10 +200,27 @@ export function TxList({ rows, categories, showAccount }: { rows: TxRow[]; categ
                               ·{" "}
                             </>
                           )}
-                          {formatTime(r.date)}
+                          {r.bankType === "manual" ? (
+                            <>
+                              <span className="font-medium text-ink-2">Manual</span> ·{" "}
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Apagar "${r.description}"?`)) startTransition(() => deleteManualTransactionAction(r.id));
+                                }}
+                                className="hover:text-danger hover:underline"
+                              >
+                                apagar
+                              </button>
+                            </>
+                          ) : (
+                            formatTime(r.date)
+                          )}
                           {showAccount && <> · {r.accountName}</>}
                           {r.feeCents > 0 && r.amountCents !== -r.feeCents && <> · inclui comissão de {formatEUR(r.feeCents)}</>}
                         </p>
+                        {r.scope === "casal" && !r.duplicateOf && r.amountCents < 0 && (
+                          <SharedPart amountCents={r.amountCents} sharedCents={r.sharedCents} onSave={(c) => updateShared(r.id, c)} />
+                        )}
                         {r.duplicateOf && (
                           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-review-ink">
                             <span className="font-medium">

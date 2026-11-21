@@ -13,7 +13,7 @@ export default async function ImportPage() {
 
   return (
     <ImportFlow
-      accounts={accounts.map((a) => ({ id: a.id, name: a.name, bank: a.bank, supported: supported.has(a.bank) }))}
+      accounts={accounts.filter((a) => a.bank !== "dinheiro").map((a) => ({ id: a.id, name: a.name, bank: a.bank, supported: supported.has(a.bank) }))}
       categories={categories.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName }))}
     />
   );

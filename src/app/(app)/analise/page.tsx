@@ -105,7 +105,7 @@ export default async function AnalisePage({ searchParams }: { searchParams: Prom
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4">
-        <Card title="Entradas e saídas por mês" subtitle="Inclui as despesas do casal que pagaste. Transferências ficam de fora." className="lg:col-span-5">
+        <Card title="Entradas e saídas por mês" subtitle="Inclui as despesas partilhadas que pagaste. Transferências ficam de fora." className="lg:col-span-5">
           <div className="mb-3">
             <Legend
               items={[

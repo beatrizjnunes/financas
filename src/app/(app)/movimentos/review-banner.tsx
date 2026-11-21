@@ -27,7 +27,7 @@ export function ReviewBanner({ toReview, imported, filtering }: { toReview: numb
           </p>
         ) : null}
         <p className={imported ? "text-ink-2" : "font-medium"}>
-          {toReview} {toReview === 1 ? "movimento por rever" : "movimentos por rever"} — confirma a categoria e se é Pessoal ou Casal.
+          {toReview} {toReview === 1 ? "movimento por rever" : "movimentos por rever"} — confirma a categoria e se é Pessoal ou Partilhado.
           Editar um movimento marca-o como revisto.
         </p>
       </div>

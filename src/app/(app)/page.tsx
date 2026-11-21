@@ -5,6 +5,7 @@ import {
   averageMonthlySpend,
   budgetLines,
   expenseCategories,
+  goalPlan,
   insights,
   monthLong,
   monthlyFlow,
@@ -29,10 +30,13 @@ import {
   myBalances,
   myBudgets,
   myCountedTransactions,
+  myGoals,
+  myInvestments,
   myRecentTransactions,
 } from "@/server/data";
 import { BudgetBar, Card, CardLink, CategoryBars, EmptyState, Gauge, PageHeader, Sparkbars, StatTile } from "@/components/charts";
 import { Icon } from "@/components/icons";
+import { LoadDemoButton } from "@/components/demo-banner";
 import { MonthPicker, pickMonth } from "@/components/month-picker";
 
 export const metadata: Metadata = { title: "Resumo" };
@@ -43,7 +47,9 @@ const arrow = (d: number) => `${d >= 0 ? "▲" : "▼"} ${pct(Math.abs(d))}`;
 export default async function ResumoPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   const user = await requireUser();
   const sp = await searchParams;
-  const [txs, categories, budgets, balances, toReview, suspended, recent, people, coupleTx] = await Promise.all([
+  const now = new Date();
+  const monthOfToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [txs, categories, budgets, balances, toReview, suspended, recent, people, coupleTx, investments, goals] = await Promise.all([
     myCountedTransactions(user.id),
     listCategories(),
     myBudgets(user.id),
@@ -53,6 +59,8 @@ export default async function ResumoPage({ searchParams }: { searchParams: Promi
     myRecentTransactions(user.id),
     listPeople(),
     coupleTransactions(),
+    myInvestments(user.id),
+    myGoals(user.id),
   ]);
 
   const greeting = `Olá, ${user.displayName}!`;
@@ -66,6 +74,10 @@ export default async function ResumoPage({ searchParams }: { searchParams: Promi
           href="/importar"
           cta="Importar o primeiro extrato"
         />
+        <div className="mt-4 text-center">
+          <LoadDemoButton />
+          <p className="mt-2 text-xs text-ink-3">Cria 8 meses de movimentos inventados para os dois. Apagas tudo com um clique.</p>
+        </div>
       </div>
     );
   }
@@ -91,7 +103,13 @@ export default async function ResumoPage({ searchParams }: { searchParams: Promi
   const daysLeft = progress ? progress.days - progress.day + 1 : 0;
 
   // Reserva
-  const totalBalance = balances.reduce((s, b) => s + b.balanceCents, 0);
+  const withBalance = balances.filter((b) => b.balanceCents != null);
+  const totalBalance = withBalance.reduce((s, b) => s + b.balanceCents!, 0);
+  const investedValue = investments.reduce((s, i) => s + i.valueCents, 0);
+  const topGoal = goals
+    .map((g) => ({ ...g, plan: goalPlan(g, monthOfToday) }))
+    .filter((g) => !g.plan.done)
+    .sort((a, b) => (a.targetMonth ?? "9999").localeCompare(b.targetMonth ?? "9999"))[0];
   const runway = avgSpend && avgSpend > 0 ? totalBalance / avgSpend : null;
 
   // Outros
@@ -240,34 +258,58 @@ export default async function ResumoPage({ searchParams }: { searchParams: Promi
           )}
         </Card>
 
-        {/* Reserva */}
-        <Card title="Dinheiro nas contas" subtitle="Último saldo de cada extrato importado">
-          {balances.length ? (
+        {/* Património */}
+        <Card title="Património" subtitle="Contas e investimentos" action={<CardLink href="/patrimonio">Gerir</CardLink>}>
+          {withBalance.length || investedValue > 0 ? (
             <>
-              <p className="num text-3xl font-semibold tracking-tight">{formatEUR(totalBalance)}</p>
+              <p className="num text-3xl font-semibold tracking-tight">{formatEUR(totalBalance + investedValue)}</p>
+              <p className="num mt-1 text-xs text-ink-3">
+                {formatEUR(totalBalance)} em contas{investedValue > 0 && <> · {formatEUR(investedValue)} investidos</>}
+              </p>
               {runway != null && (
                 <p className="mt-2 text-sm text-ink-2">
                   <span className={`chip mr-1.5 ${runway >= 6 ? "chip-pos" : runway >= 3 ? "chip-warn" : "chip-neg"}`}>
                     <Icon name="shield" className="size-3" /> {runway.toLocaleString("pt-PT", { maximumFractionDigits: 1 })} meses
                   </span>
-                  de despesas ao teu ritmo médio.
+                  de despesas com o dinheiro das contas.
                   <span className="mt-1 block text-xs text-ink-3">
                     {runway >= 6 ? "Boa reserva de emergência." : runway >= 3 ? "O habitual é ter entre 3 e 6 meses de reserva." : "Abaixo dos 3 meses recomendados para emergências."}
                   </span>
                 </p>
               )}
               <ul className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
-                {balances.map((b) => (
+                {withBalance.map((b) => (
                   <li key={b.accountId} className="flex items-baseline gap-2">
                     <span>{b.name}</span>
-                    <span className="text-xs text-ink-3">a {formatDate(b.date).slice(0, 5)}</span>
-                    <span className="num ml-auto font-medium">{formatEUR(b.balanceCents)}</span>
+                    <span className="text-xs text-ink-3">
+                      {b.source === "manual" ? "atualizado" : "extrato"} a {formatDate(b.date!).slice(0, 5)}
+                    </span>
+                    <span className="num ml-auto font-medium">{formatEUR(b.balanceCents!)}</span>
                   </li>
                 ))}
               </ul>
+              {topGoal && (
+                <div className="mt-4 border-t border-line pt-4">
+                  <div className="mb-1 flex items-baseline justify-between text-sm">
+                    <span className="truncate">🎯 {topGoal.name}</span>
+                    <span className="num text-xs text-ink-3">{pct(topGoal.plan.ratio)}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-surface-2">
+                    <div className="h-2 rounded-full bg-accent" style={{ width: `${topGoal.plan.ratio * 100}%` }} />
+                  </div>
+                  {topGoal.plan.perMonthCents != null && (
+                    <p className="num mt-1 text-xs text-ink-3">Poupa {formatEUR(topGoal.plan.perMonthCents)}/mês para chegar a tempo.</p>
+                  )}
+                </div>
+              )}
             </>
           ) : (
-            <p className="text-sm text-ink-3">Os extratos importados ainda não trazem saldo.</p>
+            <div>
+              <p className="text-sm text-ink-3">Escreve o saldo atual de cada conta e os teus investimentos para veres quanto tens no total.</p>
+              <Link href="/patrimonio" className="btn-soft mt-4">
+                Adicionar saldos <Icon name="arrowRight" className="size-4" />
+              </Link>
+            </div>
           )}
         </Card>
 
@@ -326,8 +368,8 @@ export default async function ResumoPage({ searchParams }: { searchParams: Promi
           {couple && (
             <section className="card px-5 py-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-ink-3">Saldo do casal</p>
-                <CardLink href="/casal">Ver</CardLink>
+                <p className="text-xs text-ink-3">Saldo partilhado</p>
+                <CardLink href="/partilhado">Ver</CardLink>
               </div>
               <p className="mt-1 text-[15px]">{couple}</p>
             </section>
@@ -374,7 +416,7 @@ export default async function ResumoPage({ searchParams }: { searchParams: Promi
                   <p className="truncate">{t.description}</p>
                   <p className="truncate text-xs text-ink-3">
                     {formatDate(t.date).slice(0, 5)} · {t.categoryName ?? "Sem categoria"}
-                    {t.scope === "casal" ? " · Casal" : ""}
+                    {t.scope === "casal" ? " · Partilhado" : ""}
                   </p>
                 </div>
                 <span className={`chip ${t.amountCents > 0 ? "chip-pos" : "chip-muted"}`}>{formatEUR(t.amountCents, { sign: true })}</span>

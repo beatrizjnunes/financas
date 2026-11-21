@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { coupleBalance } from "@/lib/split";
+import { coupleBalance, normalizeShared, sharedAmount } from "@/lib/split";
 
 const ivo = { id: "ivo", name: "Ivo" };
 const bea = { id: "bea", name: "Bea" };
+
+describe("parte partilhada", () => {
+  it("sharedAmount mantém o sinal e não passa do total", () => {
+    expect(sharedAmount(-6538, null)).toBe(-6538);
+    expect(sharedAmount(-6538, 3000)).toBe(-3000);
+    expect(sharedAmount(2000, 500)).toBe(500);
+    expect(sharedAmount(-1000, 5000)).toBe(-1000);
+  });
+  it("normalizeShared volta a «tudo» quando não faz sentido dividir", () => {
+    expect(normalizeShared(-6538, 3000)).toBe(3000);
+    expect(normalizeShared(-6538, 6538)).toBeNull();
+    expect(normalizeShared(-6538, 9000)).toBeNull();
+    expect(normalizeShared(-6538, 0)).toBeNull();
+    expect(normalizeShared(-6538, null)).toBeNull();
+  });
+  it("o saldo usa só a parte partilhada", () => {
+    // Bea pagou 100 € de supermercado, mas só 60 € eram da casa → Ivo deve 30 €.
+    const r = coupleBalance([{ paidBy: "bea", amountCents: sharedAmount(-10000, 6000) }], ivo, bea);
+    expect(r.debt).toEqual({ from: ivo, to: bea, cents: 3000 });
+  });
+});
 
 describe("saldo do casal", () => {
   it("50/50: quem pagou mais tem a receber metade da diferença", () => {

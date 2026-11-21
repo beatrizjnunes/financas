@@ -3,7 +3,7 @@ export type Scope = (typeof SCOPES)[number];
 
 export const SCOPE_LABEL: Record<Scope, string> = {
   pessoal: "Pessoal",
-  casal: "Casal",
+  casal: "Partilhado",
   interna: "Transf. interna",
   entre_nos: "Entre nós",
   ignorar: "Ignorar",
@@ -11,7 +11,7 @@ export const SCOPE_LABEL: Record<Scope, string> = {
 
 export const SCOPE_HINT: Record<Scope, string> = {
   pessoal: "Só tu vês",
-  casal: "Entra nas contas do casal",
+  casal: "Despesa da casa, dividida entre os dois",
   interna: "Entre contas tuas — não conta como despesa",
   entre_nos: "Dinheiro entre vocês — não conta como despesa",
   ignorar: "Fica guardada mas não entra em nenhum cálculo",
@@ -29,11 +29,23 @@ export const KIND_LABEL: Record<Kind, string> = {
   pontual: "Pontual",
 };
 
-export const BANKS = ["ing", "revolut", "caixa"] as const;
+export const BANKS = ["ing", "revolut", "caixa", "dinheiro"] as const;
 export type Bank = (typeof BANKS)[number];
 
 export const BANK_LABEL: Record<Bank, string> = {
   ing: "ING",
   revolut: "Revolut",
   caixa: "Caixa",
+  dinheiro: "Dinheiro",
+};
+
+export const INVESTMENT_TYPES = ["acoes", "etf", "ppr", "cripto", "deposito", "outro"] as const;
+export type InvestmentType = (typeof INVESTMENT_TYPES)[number];
+export const INVESTMENT_LABEL: Record<InvestmentType, string> = {
+  acoes: "Ações",
+  etf: "ETF / Fundos",
+  ppr: "PPR",
+  cripto: "Cripto",
+  deposito: "Depósito a prazo",
+  outro: "Outro",
 };

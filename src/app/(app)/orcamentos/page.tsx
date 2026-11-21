@@ -35,7 +35,7 @@ export default async function OrcamentosPage({ searchParams }: { searchParams: P
     <div>
       <PageHeader
         title="Orçamentos"
-        subtitle="Um limite mensal por categoria, só teu. Conta as tuas despesas pessoais e as do casal que pagaste."
+        subtitle="Um limite mensal por categoria, só teu. Conta as tuas despesas pessoais e as partilhadas que pagaste."
       >
         <MonthPicker month={month} first={months[0]} last={months.at(-1)!} basePath="/orcamentos" />
       </PageHeader>

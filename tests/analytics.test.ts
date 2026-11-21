@@ -4,7 +4,9 @@ import {
   averageMonthlySpend,
   budgetLines,
   cumulativeByDay,
+  goalPlan,
   insights,
+  monthsBetween,
   merchantKey,
   monthlyFlow,
   monthsBefore,
@@ -152,9 +154,30 @@ describe("recurringExpenses", () => {
     expect(r.map((x) => x.key)).toEqual(["netflix com"]);
     expect(r[0]).toMatchObject({ monthlyCents: 1249, annualCents: 14988, months: 4, categoryName: "Subscrições" });
   });
+  it("ignora supermercados mesmo que pareçam regulares", () => {
+    const lidl = ["06", "07", "08", "09"].map((m) => tx(`2026-${m}-04`, -5400, "Supermercado", "Lidl"));
+    expect(recurringExpenses(lidl, "2026-09")).toEqual([]);
+  });
   it("merchantKey ignora números e acentos", () => {
     expect(merchantKey("Pingo Doce Lisboa 0231")).toBe(merchantKey("PINGO DOCE LISBOA 9999"));
     expect(merchantKey("Água")).toBe("agua");
+  });
+});
+
+describe("goalPlan", () => {
+  it("calcula quanto falta por mês até à data", () => {
+    const p = goalPlan({ targetCents: 150000, savedCents: 45000, targetMonth: "2027-06" }, "2026-11");
+    expect(p).toMatchObject({ remainingCents: 105000, monthsLeft: 7, perMonthCents: 15000, done: false, late: false });
+    expect(p.ratio).toBeCloseTo(0.3);
+  });
+  it("objetivo atingido, sem data e atrasado", () => {
+    expect(goalPlan({ targetCents: 1000, savedCents: 1200, targetMonth: null }, "2026-11")).toMatchObject({ done: true, ratio: 1, perMonthCents: null });
+    expect(goalPlan({ targetCents: 1000, savedCents: 0, targetMonth: null }, "2026-11").perMonthCents).toBeNull();
+    expect(goalPlan({ targetCents: 1000, savedCents: 0, targetMonth: "2026-10" }, "2026-11")).toMatchObject({ late: true, perMonthCents: 1000 });
+  });
+  it("monthsBetween", () => {
+    expect(monthsBetween("2026-11", "2027-06")).toBe(7);
+    expect(monthsBetween("2026-11", "2026-11")).toBe(0);
   });
 });
 

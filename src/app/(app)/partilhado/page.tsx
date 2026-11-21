@@ -7,35 +7,36 @@ import { requireUser } from "@/server/auth";
 import { coupleTransactions, listPeople } from "@/server/data";
 import { Card, CategoryBars, ColumnChart, EmptyState, Legend, PageHeader, SeriesKey, StackBar, StatTile, TableView } from "@/components/charts";
 import { MonthPicker, pickMonth } from "@/components/month-picker";
+import { Icon } from "@/components/icons";
 
-export const metadata: Metadata = { title: "Casal" };
+export const metadata: Metadata = { title: "Partilhado" };
 
 const PERSON_COLOR = ["var(--series-1)", "var(--series-2)"];
 const KIND_COLOR = { fixa: "var(--series-1)", variavel: "var(--series-2)", pontual: "var(--series-3)" } as const;
 
-export default async function CasalPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
+export default async function PartilhadoPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   const user = await requireUser();
   const sp = await searchParams;
   const [people, txs] = await Promise.all([listPeople(), coupleTransactions()]);
 
   if (people.length !== 2) {
-    return <p className="text-sm text-ink-3">A área do casal precisa de exatamente 2 utilizadores.</p>;
+    return <p className="text-sm text-ink-3">A área partilhada precisa de exatamente 2 utilizadores.</p>;
   }
   const [a, b] = people;
   const colorOf = (id: string) => PERSON_COLOR[id === a.id ? 0 : 1];
   const nameOf = (id: string) => (id === a.id ? a.name : b.name);
 
-  const subtitle = `Partilhado entre ${a.name} e ${b.name}. Só aparecem os movimentos marcados como Casal — o resto continua privado.`;
+  const subtitle = `Partilhado entre ${a.name} e ${b.name}. Só aparecem os movimentos marcados como Partilhado — o resto continua privado. Se só parte de uma despesa for da casa, divide-a em Movimentos.`;
 
   if (!txs.length) {
     return (
       <div>
-        <PageHeader title="Casal" subtitle={subtitle} />
+        <PageHeader title="Partilhado" subtitle={subtitle} />
         <EmptyState
-          title="Ainda não há despesas do casal"
+          title="Ainda não há despesas partilhadas"
           text={
             <>
-              Em Movimentos (ou ao importar), marca como <span className="font-medium text-ink-2">Casal</span> o que é da casa: renda,
+              Em Movimentos (ou ao importar), marca como <span className="font-medium text-ink-2">Partilhado</span> o que é da casa: renda,
               supermercado, contas… Aparece aqui para os dois, com quem pagou e o saldo entre vocês.
             </>
           }
@@ -69,8 +70,8 @@ export default async function CasalPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHeader title="Casal" subtitle={subtitle}>
-        <MonthPicker month={month} first={months[0]} last={months.at(-1)!} basePath="/casal" />
+      <PageHeader title="Partilhado" subtitle={subtitle}>
+        <MonthPicker month={month} first={months[0]} last={months.at(-1)!} basePath="/partilhado" />
       </PageHeader>
 
       {/* Saldo entre os dois */}
@@ -122,14 +123,14 @@ export default async function CasalPage({ searchParams }: { searchParams: Promis
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-4">
-        <Card title="Por categoria" subtitle={`Despesas do casal em ${monthLong(month)}.`} className="lg:col-span-3">
+        <Card title="Por categoria" subtitle={`Despesas partilhadas em ${monthLong(month)}.`} className="lg:col-span-3">
           {cats.length ? (
             <CategoryBars
               color="var(--series-1)"
               items={cats.map((c) => ({ key: c.key, label: c.name, cents: c.cents, prevCents: months.includes(prev) ? c.prevCents : undefined }))}
             />
           ) : (
-            <p className="text-sm text-ink-3">Sem despesas do casal neste mês.</p>
+            <p className="text-sm text-ink-3">Sem despesas partilhadas neste mês.</p>
           )}
         </Card>
 
@@ -154,7 +155,7 @@ export default async function CasalPage({ searchParams }: { searchParams: Promis
           <TableView head={["Mês", a.name, b.name]} rows={last12.map((m, i) => [monthLong(m), formatEUR(perMonth(a.id)[i]), formatEUR(perMonth(b.id)[i])])} />
         </Card>
 
-        <Card title="Movimentos do casal" subtitle={`${monthLong(month)} · ${formatDate(`${month}-01`)} a ${formatDate(`${month}-${daysInMonth(month)}`)}`} className="lg:col-span-5">
+        <Card title="Movimentos partilhados" subtitle={`${monthLong(month)} · ${formatDate(`${month}-01`)} a ${formatDate(`${month}-${daysInMonth(month)}`)}`} className="lg:col-span-5">
           <ul className="-mx-5 divide-y divide-line border-t border-line">
             {inMonth.map((t) => (
               <li key={t.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
@@ -167,7 +168,14 @@ export default async function CasalPage({ searchParams }: { searchParams: Promis
                   <SeriesKey color={colorOf(t.paidBy)} />
                   <span className="hidden sm:inline">{nameOf(t.paidBy)}</span>
                 </span>
-                <span className="num w-24 text-right font-medium">{formatEUR(t.amountCents)}</span>
+                <span className="w-28 text-right">
+                  <span className="num block font-medium">{formatEUR(t.amountCents)}</span>
+                  {t.partial && (
+                    <span className="num inline-flex items-center gap-1 text-[11px] text-warn" title="Só esta parte é partilhada">
+                      <Icon name="pencil" className="size-3" /> de {formatEUR(t.fullAmountCents)}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>

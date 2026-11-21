@@ -1,0 +1,1 @@
+ALTER TABLE `transactions` ADD `shared_cents` integer;

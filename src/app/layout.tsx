@@ -6,7 +6,7 @@ const appFont = DM_Sans({ variable: "--font-app", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: { default: "Finanças", template: "%s · Finanças" },
-  description: "Finanças pessoais e do casal",
+  description: "Finanças pessoais e partilhadas",
   robots: { index: false, follow: false },
 };
 

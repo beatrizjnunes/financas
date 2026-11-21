@@ -14,6 +14,7 @@ import {
 } from "@/server/data";
 import { EmptyState, PageHeader } from "@/components/charts";
 import { Icon } from "@/components/icons";
+import { ManualTxButton } from "./manual-form";
 import { ReviewBanner } from "./review-banner";
 import { TxFiltersBar } from "./filters";
 import { TxList } from "./tx-list";
@@ -69,9 +70,15 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
   return (
     <div>
       <PageHeader title="Movimentos" subtitle="Todas as tuas contas, por ordem cronológica. Só tu vês esta página.">
-        <Link href="/importar" className="btn-primary">
-          <Icon name="upload" className="size-4" /> Importar extrato
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <ManualTxButton
+            accounts={accounts.map((a) => ({ id: a.id, name: a.name, bank: a.bank }))}
+            categories={categories.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName }))}
+          />
+          <Link href="/importar" className="btn-primary">
+            <Icon name="upload" className="size-4" /> Importar extrato
+          </Link>
+        </div>
       </PageHeader>
 
       {imported === 0 && (
@@ -134,7 +141,7 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
             showAccount={accounts.length > 1}
           />
           <p className="mt-4 text-xs text-ink-3">
-            {rows.length} {rows.length === 1 ? "movimento" : "movimentos"}. Os totais só contam Pessoal e Casal — transferências,
+            {rows.length} {rows.length === 1 ? "movimento" : "movimentos"}. Os totais só contam Pessoal e Partilhado — transferências,
             movimentos ignorados e possíveis duplicados em suspenso ficam de fora.
           </p>
         </>
