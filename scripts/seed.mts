@@ -4,12 +4,10 @@ import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { DEFAULT_CATEGORIES } from "../src/server/db/categories.ts";
+import { dbAuthToken, dbUrl } from "../src/server/db/config.ts";
 import * as schema from "../src/server/db/schema.ts";
 
-const db = drizzle(
-  createClient({ url: process.env.DATABASE_URL || "file:data/financas.db", authToken: process.env.DATABASE_AUTH_TOKEN || undefined }),
-  { schema },
-);
+const db = drizzle(createClient({ url: dbUrl, authToken: dbAuthToken }), { schema });
 
 type Bank = "ing" | "revolut" | "caixa";
 const PEOPLE: { username: string; displayName: string; env: string; accounts: { bank: Bank; name: string }[] }[] = [

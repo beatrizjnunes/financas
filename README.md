@@ -68,9 +68,10 @@ Turso (produção): `turso db shell <nome> .dump > backup.sql`. A exportação e
 
 ## Publicar (Vercel + Turso)
 
-1. `turso db create financas` → `turso db show financas --url` e `turso db tokens create financas`.
-2. Na Vercel, define `DATABASE_URL` e `DATABASE_AUTH_TOKEN`.
-3. Localmente, com essas variáveis no `.env`: `npm run db:migrate && npm run db:seed`.
+1. Na Vercel: *Storage → Turso → Create*, ligada ao projeto com o prefixo `DATABASE`. Cria
+   `DATABASE_TURSO_DATABASE_URL` e `DATABASE_TURSO_AUTH_TOKEN` (também se aceitam `DATABASE_URL` / `DATABASE_AUTH_TOKEN`).
+2. `npx vercel link` e `npx vercel env pull .env.production.local --environment=production`.
+3. Com essas variáveis carregadas: `npm run db:migrate && npm run db:seed`.
 4. Faz deploy do repositório na Vercel.
 
 ## Estrutura

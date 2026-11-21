@@ -1,0 +1,2 @@
+# Os fixtures dos testes têm de manter LF (os testes geram a variante CRLF a partir deles).
+tests/fixtures/*.csv text eol=lf
