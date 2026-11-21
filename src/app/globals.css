@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-2: #f1f1ee;
+  --ink: #1a1a18;
+  --ink-2: #57574f;
+  --ink-3: #8c8c84;
+  --line: #e6e6e1;
+  --line-strong: #d4d4cd;
+  --accent: #1d4ed8;
+  --accent-ink: #ffffff;
+  --pos: #16794a;
+  --neg: #1a1a18;
+  --danger: #b42318;
+  --danger-bg: #fef3f2;
+
+  /* Gráficos: paleta validada (CVD) — azul, laranja, verde-água */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --chart-grid: #ecebe6;
+  --chart-axis: #c3c2b7;
+  --chart-muted: #b9b8b0;
+  --chart-hover: rgba(26, 26, 24, 0.035);
+
+  --review: #e0a100;
+  --review-bg: #fff8e6;
+  --review-ink: #7a5600;
+
+  --scope-pessoal: #8c8c84;
+  --scope-casal: #c2410c;
+  --scope-interna: #0e7490;
+  --scope-entre_nos: #7c3aed;
+  --scope-ignorar: #c4c4bc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111110;
+    --surface: #1a1a18;
+    --surface-2: #232320;
+    --ink: #ededea;
+    --ink-2: #b4b4ac;
+    --ink-3: #7d7d75;
+    --line: #2b2b28;
+    --line-strong: #3a3a36;
+    --accent: #6b8cff;
+    --accent-ink: #0b0b0a;
+    --pos: #4ade80;
+    --neg: #ededea;
+    --danger: #f97066;
+    --danger-bg: #2a1311;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --chart-grid: #2b2b28;
+    --chart-axis: #3a3a36;
+    --chart-muted: #5c5c56;
+    --chart-hover: rgba(255, 255, 255, 0.04);
+    --review: #c98500;
+    --review-bg: #2a2210;
+    --review-ink: #f2c14e;
+    --scope-casal: #fb923c;
+    --scope-interna: #22d3ee;
+    --scope-entre_nos: #a78bfa;
+    --scope-ignorar: #4a4a45;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-pos: var(--pos);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-review: var(--review);
+  --color-review-bg: var(--review-bg);
+  --color-review-ink: var(--review-ink);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-feature-settings: "cv11", "ss01";
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Selects nativos com aspeto próprio (funcionam bem no telemóvel). */
+.select {
+  appearance: none;
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath stroke='%238c8c84' stroke-width='1.5' d='m1 1 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  padding-right: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  height: 2rem;
+  padding-left: 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--ink);
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.select:hover { border-color: var(--line-strong); }
+.select:focus-visible, .input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.select[data-empty="true"] { color: var(--ink-3); }
+.select[data-missing="true"] { border-color: var(--review); background-color: var(--review-bg); color: var(--review-ink); }
+
+/* Movimento por rever: barra à esquerda. */
+.needs-review { box-shadow: inset 3px 0 0 var(--review); }
+
+.input {
+  height: 2.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  min-width: 0;
+}
+.input::placeholder { color: var(--ink-3); }
+
+.scope-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 999px; flex: none; }
+
+input[type="checkbox"] { accent-color: var(--accent); width: 1rem; height: 1rem; }
+
+/* Linha de movimento: grelha em desktop, empilhada no telemóvel. */
+.tx-row {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr auto;
+  grid-template-areas:
+    "check desc amount"
+    ".     controls controls";
+  column-gap: 0.75rem;
+  row-gap: 0.5rem;
+  align-items: center;
+}
+.tx-row > .c-check { grid-area: check; }
+.tx-row > .c-desc { grid-area: desc; min-width: 0; }
+.tx-row > .c-amount { grid-area: amount; }
+.tx-row > .c-controls { grid-area: controls; display: grid; grid-template-columns: 1.3fr 1fr 1.1fr; gap: 0.375rem; }
+@media (max-width: 899px) { .tx-row .select { font-size: 0.75rem; padding-left: 0.5rem; padding-right: 1.4rem; background-position: right 0.45rem center; } }
+
+@media (min-width: 900px) {
+  .tx-row {
+    grid-template-columns: 1.25rem minmax(0, 1fr) 30rem 7.5rem;
+    grid-template-areas: "check desc controls amount";
+  }
+  .tx-row > .c-controls { grid-template-columns: 11rem 7.5rem 10rem; }
+}

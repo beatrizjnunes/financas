@@ -1,0 +1,1 @@
+ALTER TABLE `transactions` ADD `needs_review` integer DEFAULT true NOT NULL;
