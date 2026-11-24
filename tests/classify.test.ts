@@ -24,6 +24,24 @@ describe("âmbito sugerido", () => {
     expect(suggestScope(byDesc("PESSOA IVO")[0], { ownNames: [], partnerNames: ["Pessóa Ivo"] })).toBe("entre_nos");
   });
 
+  it("nomes encurtados pelo banco e transferências sem contraparte (ING)", () => {
+    const people = { ownNames: ["BEATRIZ JACINTO NUNES"], partnerNames: ["IVO PINTO DUARTE"] };
+    const base = { ...byDesc("Kruidvat")[0], amountCents: 71500 };
+    const cp = (counterparty: string) => suggestScope({ ...base, counterparty }, people);
+    expect(cp("Ivo Duarte")).toBe("entre_nos");
+    expect(cp("Ivo Pinto Duarte")).toBe("entre_nos");
+    expect(cp("Beatriz Jacinto N")).toBe("interna");
+    expect(cp("Beatriz Nunes")).toBe("interna");
+    expect(cp("Antonio Alexandre Oliveira Duarte")).toBe("pessoal");
+    expect(cp("Ivo Silva")).toBe("pessoal");
+    expect(cp("Ivo")).toBe("pessoal");
+    const ing = { ownNames: ["IVO PINTO DUARTE"], partnerNames: ["BEATRIZ JACINTO NUNES"] };
+    const desc = (description: string) => suggestScope({ ...base, counterparty: null, description }, ing);
+    expect(desc("Transferência de BEATRIZ JACINTO NUNES")).toBe("entre_nos");
+    expect(desc("Transferência para BEATRIZ JACINTO NUNES")).toBe("entre_nos");
+    expect(desc("Kruidvat")).toBe("pessoal");
+  });
+
   it("o resto é pessoal por defeito", () => {
     expect(suggestScope(byDesc("Kruidvat")[0], bea)).toBe("pessoal");
     expect(suggestScope(byDesc("Payment from EMPRESA")[0], bea)).toBe("pessoal");

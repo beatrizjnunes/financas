@@ -1,9 +1,9 @@
 import "server-only";
 import { db, schema } from "../db";
-import { existingHashes, listCategories, myAccount, myDuplicateCandidates, peopleNames } from "../data";
+import { existingHashes, listCategories, myAccount, myDuplicateCandidates, myPastChoices, pastChoiceKey, peopleNames } from "../data";
 import type { Kind, Scope } from "@/lib/labels";
 import { BANK_LABEL } from "@/lib/labels";
-import { isRefundRow, suggestCategoryName, suggestScope } from "./classify";
+import { isRefundRow, SCOPE_BY_HOUR, suggestCategoryName, suggestScope } from "./classify";
 import { candidateWindow, findPossibleDuplicate } from "./duplicates";
 import { hashRows } from "./hash";
 import { detectParser, parserForBank } from "./parsers";
@@ -63,9 +63,14 @@ export async function buildPreview(userId: string, accountId: string, content: s
   const people = await peopleNames(userId);
   const catByName = new Map((await listCategories()).map((c) => [c.name, c.id]));
 
+  const past = await myPastChoices(userId, rows.map((r) => r.description));
+
   const preview = rows.map((r, i): PreviewRow => {
     const scope = suggestScope(r, people);
     const cat = suggestCategoryName(r, scope);
+    // Mesma descrição já classificada antes → repete a escolha. As transferências entre nós/contas
+    // próprias e o Albert Heijn (casa ou almoço, conforme a hora) seguem as regras automáticas.
+    const prev = scope === "pessoal" && !SCOPE_BY_HOUR.test(r.descriptionOriginal) ? past.get(pastChoiceKey(r.description, r.amountCents)) : undefined;
     return {
       key: hashes[i],
       date: r.date,
@@ -73,9 +78,9 @@ export async function buildPreview(userId: string, accountId: string, content: s
       descriptionOriginal: r.descriptionOriginal,
       amountCents: r.amountCents,
       feeCents: r.feeCents,
-      categoryId: cat ? (catByName.get(cat) ?? null) : null,
-      scope,
-      kind: "variavel",
+      categoryId: prev ? prev.categoryId : cat ? (catByName.get(cat) ?? null) : null,
+      scope: prev ? prev.scope : scope,
+      kind: prev ? prev.kind : "variavel",
       duplicate: existing.has(hashes[i]),
       possibleDuplicate: maybeDup[i]
         ? { date: maybeDup[i]!.date, description: maybeDup[i]!.description, accountName: maybeDup[i]!.accountName }

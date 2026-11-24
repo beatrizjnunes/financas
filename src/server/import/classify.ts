@@ -15,19 +15,44 @@ const normalize = (s: string) =>
  * O nome da contraparte é igual a um dos nomes, ou é o início dele cortado pelo banco
  * (a Caixa mostra "Beatriz Jacinto N" para "Beatriz Jacinto Nunes").
  */
-const matchesAny = (who: string, names: string[]) => {
+export const matchesAny = (who: string, names: string[]) => {
   const w = normalize(who);
+  const wt = w.split(" ");
   return names.some((n) => {
     const x = normalize(n);
-    return !!x && (x === w || (w.length >= 10 && w.includes(" ") && x.startsWith(w)));
+    if (!x) return false;
+    if (x === w || (w.length >= 10 && w.includes(" ") && x.startsWith(w))) return true;
+    // Nome encurtado pelo banco: "Ivo Duarte" para "Ivo Pinto Duarte" (mesmo primeiro nome e
+    // os restantes nomes pela mesma ordem; o último pode vir cortado, como "Beatriz Jacinto N").
+    const xt = x.split(" ");
+    if (wt.length < 2 || wt[0] !== xt[0]) return false;
+    let j = 1;
+    for (let i = 1; i < wt.length; i++) {
+      const last = i === wt.length - 1;
+      while (j < xt.length && !(xt[j] === wt[i] || (last && xt[j].startsWith(wt[i])))) j++;
+      if (j >= xt.length) return false;
+      j++;
+    }
+    return true;
   });
 };
 
+/** Nome da outra pessoa numa transferência: a contraparte, ou o que vem em "Transferência de/para X". */
+function transferParty(row: ParsedRow): string | null {
+  if (row.counterparty) return row.counterparty;
+  const m = /^Transfer[eê]ncia (?:imediata )?(?:de|para) (.+)$/i.exec(row.description.trim());
+  return m ? m[1] : null;
+}
+
+/** Albert Heijn: o âmbito depende da hora (ver suggestScope). */
+export const SCOPE_BY_HOUR = /albert heijn|\bah to go\b/i;
+
 /** Sugere o âmbito: transferências para nós próprios ou para o parceiro não são despesas. */
 export function suggestScope(row: ParsedRow, people: People): Scope {
-  if (row.counterparty) {
-    if (matchesAny(row.counterparty, people.ownNames)) return "interna";
-    if (matchesAny(row.counterparty, people.partnerNames)) return "entre_nos";
+  const party = transferParty(row);
+  if (party) {
+    if (matchesAny(party, people.ownNames)) return "interna";
+    if (matchesAny(party, people.partnerNames)) return "entre_nos";
   }
   // Carregamento com cartão próprio (ex.: Apple Pay top-up a partir do cartão do ING).
   if (row.bankType === "Topup" && /(?:top-up by|Apple Pay através de) \*\d+/i.test(row.descriptionOriginal)) return "interna";
@@ -36,7 +61,7 @@ export function suggestScope(row: ParsedRow, people: People): Scope {
   // …e do lado da Caixa ("CAR WAL REVOLUT 6408").
   if (row.amountCents < 0 && /^CAR WAL REVOLUT\b/i.test(row.descriptionOriginal)) return "interna";
   // Albert Heijn: em dias úteis das 9h às 18h é o almoço/lanche de cada um; fora disso são compras da casa.
-  if (row.amountCents < 0 && /albert heijn|\bah to go\b/i.test(row.descriptionOriginal)) {
+  if (row.amountCents < 0 && SCOPE_BY_HOUR.test(row.descriptionOriginal)) {
     return isWorkingHours(row.date) ? "pessoal" : "casal";
   }
   return "pessoal";

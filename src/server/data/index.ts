@@ -39,6 +39,38 @@ export async function peopleNames(userId: string) {
   };
 }
 
+export type PastChoice = { scope: Scope; categoryId: string | null; kind: Kind };
+
+/**
+ * Como o utilizador classificou da última vez cada descrição (separando entradas de saídas), para a
+ * importação repetir a escolha: a renda ao senhorio marcada como Partilhado fica Partilhado no mês seguinte.
+ */
+export async function myPastChoices(userId: string, descriptions: string[]): Promise<Map<string, PastChoice>> {
+  const out = new Map<string, PastChoice>();
+  const unique = [...new Set(descriptions)];
+  for (let i = 0; i < unique.length; i += 500) {
+    const rows = await db
+      .select({
+        description: transactions.description,
+        amountCents: transactions.amountCents,
+        scope: transactions.scope,
+        categoryId: transactions.categoryId,
+        kind: transactions.kind,
+      })
+      .from(transactions)
+      .where(and(eq(transactions.ownerId, userId), inArray(transactions.description, unique.slice(i, i + 500)), alive(), isNull(transactions.duplicateOf)))
+      .orderBy(desc(transactions.date))
+      .all();
+    for (const r of rows) {
+      const key = pastChoiceKey(r.description, r.amountCents);
+      if (!out.has(key)) out.set(key, { scope: r.scope, categoryId: r.categoryId, kind: r.kind });
+    }
+  }
+  return out;
+}
+
+export const pastChoiceKey = (description: string, amountCents: number) => `${amountCents < 0 ? "-" : "+"}${description}`;
+
 export async function existingHashes(accountId: string, hashes: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   for (let i = 0; i < hashes.length; i += 500) {
