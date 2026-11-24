@@ -8,5 +8,7 @@ export const DEFAULT_CATEGORIES: { group: string; names: string[] }[] = [
   { group: "Saúde", names: ["Saúde e beleza"] },
   { group: "Finanças", names: ["Comissões bancárias", "Seguros", "Impostos", "Transferências"] },
   { group: "Receitas", names: ["Salário", "Outras receitas"] },
+  // Não é gasto: o dinheiro continua a ser teu (soma-se aos investimentos do Património).
+  { group: "Investimentos", names: ["Investimentos"] },
   { group: "Outros", names: ["Outros"] },
 ];

@@ -1,8 +1,17 @@
 import type { Metadata } from "next";
-import { averageMonthlySpend, goalPlan, monthlyFlow } from "@/lib/analytics";
-import { formatEUR } from "@/lib/format";
+import Link from "next/link";
+import { averageMonthlySpend, goalPlan, INVESTMENT_CATEGORY, monthlyFlow } from "@/lib/analytics";
+import { formatDate, formatEUR } from "@/lib/format";
 import { requireUser } from "@/server/auth";
-import { ensureCashAccount, myBalances, myCountedTransactions, myGoals, myInvestments } from "@/server/data";
+import {
+  ensureCashAccount,
+  listCategories,
+  myBalances,
+  myCountedTransactions,
+  myGoals,
+  myInvestments,
+  myUnlinkedInvestmentTxs,
+} from "@/server/data";
 import { Card, PageHeader, StatTile } from "@/components/charts";
 import { AccountsEditor, GoalsEditor, InvestmentsEditor } from "./patrimonio-ui";
 
@@ -11,7 +20,16 @@ export const metadata: Metadata = { title: "Património" };
 export default async function PatrimonioPage() {
   const user = await requireUser();
   await ensureCashAccount(user.id);
-  const [balances, investments, goals, txs] = await Promise.all([myBalances(user.id), myInvestments(user.id), myGoals(user.id), myCountedTransactions(user.id)]);
+  const [balances, investments, goals, txs, unlinked, categories] = await Promise.all([
+    myBalances(user.id),
+    myInvestments(user.id),
+    myGoals(user.id),
+    myCountedTransactions(user.id),
+    myUnlinkedInvestmentTxs(user.id),
+    listCategories(),
+  ]);
+  const investCat = categories.find((c) => c.name === INVESTMENT_CATEGORY);
+  const unlinkedCents = unlinked.reduce((s, t) => s - t.amountCents, 0);
 
   const now = new Date();
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -54,7 +72,31 @@ export default async function PatrimonioPage() {
         <Card title="Saldos das contas" subtitle="O mais recente entre o do último extrato e o que escreveres à mão.">
           <AccountsEditor accounts={balances} />
         </Card>
-        <Card title="Investimentos" subtitle="Ações, ETF, PPR, cripto… Atualiza o valor de vez em quando.">
+        <Card title="Investimentos" subtitle="Ações, ETF, PPR, cripto… Os aportes da categoria Investimentos somam-se sozinhos; atualiza o valor de vez em quando.">
+          {unlinked.length > 0 && (
+            <div className="mb-4 rounded-xl bg-warn-bg px-4 py-3 text-sm">
+              <p>
+                <b className="font-medium">
+                  {unlinked.length} {unlinked.length === 1 ? "movimento" : "movimentos"} de investimento por associar
+                </b>{" "}
+                <span className="text-ink-2">({formatEUR(unlinkedCents)}).</span>
+              </p>
+              <ul className="mt-1.5 space-y-0.5 text-xs text-ink-2">
+                {unlinked.slice(0, 3).map((t) => (
+                  <li key={t.id} className="flex gap-2">
+                    <span className="num text-ink-3">{formatDate(t.date).slice(0, 5)}</span>
+                    <span className="truncate">{t.description}</span>
+                    <span className="num ml-auto">{formatEUR(-t.amountCents)}</span>
+                  </li>
+                ))}
+              </ul>
+              {investCat && (
+                <Link href={`/movimentos?categoria=${investCat.id}`} className="mt-2 inline-block text-xs font-medium text-warn hover:underline">
+                  Abrir e associar a um investimento →
+                </Link>
+              )}
+            </div>
+          )}
           <InvestmentsEditor items={investments} />
         </Card>
         <Card title="Objetivos de poupança" subtitle="Quanto queres juntar e até quando — a app diz quanto pôr de lado por mês." className="lg:col-span-2">

@@ -1,4 +1,4 @@
-// Agregações para os gráficos. Funções puras sobre movimentos que "contam" (Pessoal + Casal).
+// Agregações para os gráficos. Funções puras sobre movimentos que "contam" (Pessoal + a tua parte do Partilhado).
 
 import type { Kind } from "./labels";
 
@@ -9,7 +9,19 @@ export type ATx = {
   categoryId: string | null;
   categoryName: string | null;
   kind: Kind;
+  /** Entrada que devolve dinheiro de uma despesa: desconta no gasto em vez de ser receita. */
+  refund?: boolean;
 };
+
+/**
+ * Quanto um movimento pesa no gasto: despesas contam pelo valor, reembolsos descontam (valor negativo),
+ * receitas não são gasto (null).
+ */
+export function spendOf(t: Pick<ATx, "amountCents" | "refund">): number | null {
+  if (t.amountCents < 0) return -t.amountCents;
+  if (t.refund && t.amountCents > 0) return -t.amountCents;
+  return null;
+}
 
 export const monthOf = (date: string) => date.slice(0, 7);
 
@@ -42,8 +54,9 @@ export function monthlyFlow(txs: ATx[]): MonthFlow[] {
   for (const t of txs) {
     const m = monthOf(t.date);
     const cur = by.get(m) ?? { inc: 0, out: 0 };
-    if (t.amountCents > 0) cur.inc += t.amountCents;
-    else cur.out += -t.amountCents;
+    const s = spendOf(t);
+    if (s != null) cur.out += s;
+    else cur.inc += t.amountCents;
     by.set(m, cur);
   }
   const months = [...by.keys()].sort();
@@ -68,13 +81,14 @@ export function spendByCategory(txs: ATx[], month: string): CategorySpend[] {
   const prev = prevMonth(month);
   const by = new Map<string, CategorySpend>();
   for (const t of txs) {
-    if (t.amountCents >= 0) continue;
+    const s = spendOf(t);
+    if (s == null) continue;
     const m = monthOf(t.date);
     if (m !== month && m !== prev) continue;
     const key = t.categoryId ?? "sem";
     const cur = by.get(key) ?? { key, name: t.categoryName ?? "Sem categoria", cents: 0, prevCents: 0 };
-    if (m === month) cur.cents += -t.amountCents;
-    else cur.prevCents += -t.amountCents;
+    if (m === month) cur.cents += s;
+    else cur.prevCents += s;
     by.set(key, cur);
   }
   return [...by.values()].filter((c) => c.cents > 0).sort((a, b) => b.cents - a.cents);
@@ -82,7 +96,11 @@ export function spendByCategory(txs: ATx[], month: string): CategorySpend[] {
 
 export function spendByKind(txs: ATx[], month: string): Record<Kind, number> {
   const out: Record<Kind, number> = { fixa: 0, variavel: 0, pontual: 0 };
-  for (const t of txs) if (t.amountCents < 0 && monthOf(t.date) === month) out[t.kind] += -t.amountCents;
+  for (const t of txs) {
+    const s = spendOf(t);
+    if (s != null && monthOf(t.date) === month) out[t.kind] += s;
+  }
+  for (const k of Object.keys(out) as Kind[]) out[k] = Math.max(0, out[k]);
   return out;
 }
 
@@ -103,8 +121,9 @@ export function topMerchants(txs: ATx[], month: string, n = 6) {
 export function cumulativeByDay(txs: ATx[], month: string): number[] {
   const days = new Array(daysInMonth(month)).fill(0);
   for (const t of txs) {
-    if (t.amountCents >= 0 || monthOf(t.date) !== month) continue;
-    days[Number(t.date.slice(8, 10)) - 1] += -t.amountCents;
+    const s = spendOf(t);
+    if (s == null || monthOf(t.date) !== month) continue;
+    days[Number(t.date.slice(8, 10)) - 1] += s;
   }
   for (let i = 1; i < days.length; i++) days[i] += days[i - 1];
   return days;
@@ -172,10 +191,11 @@ export function averageByCategory(txs: ATx[], month: string, n = 3): Map<string,
   const out = new Map<string, CategoryAverage>();
   if (!window.size) return out;
   for (const t of txs) {
-    if (t.amountCents >= 0 || !window.has(monthOf(t.date))) continue;
+    const s = spendOf(t);
+    if (s == null || !window.has(monthOf(t.date))) continue;
     const key = t.categoryId ?? "sem";
     const cur = out.get(key) ?? { key, name: t.categoryName ?? "Sem categoria", avgCents: 0 };
-    cur.avgCents += -t.amountCents;
+    cur.avgCents += s;
     out.set(key, cur);
   }
   for (const c of out.values()) c.avgCents = Math.round(c.avgCents / window.size);
@@ -243,11 +263,13 @@ type Split = { steady: number; variable: number };
 export function spendSplit(txs: ATx[], month: string): Map<string, Split> {
   const out = new Map<string, Split>();
   for (const t of txs) {
-    if (t.amountCents >= 0 || monthOf(t.date) !== month) continue;
+    const s = spendOf(t);
+    if (s == null || monthOf(t.date) !== month) continue;
     const key = t.categoryId ?? "sem";
     const cur = out.get(key) ?? { steady: 0, variable: 0 };
-    if (t.kind === "variavel") cur.variable += -t.amountCents;
-    else cur.steady += -t.amountCents;
+    // Um reembolso (s < 0) é dinheiro certo: não se extrapola.
+    if (t.kind === "variavel" && s > 0) cur.variable += s;
+    else cur.steady += s;
     out.set(key, cur);
   }
   return out;
@@ -361,8 +383,11 @@ export function monthProgress(month: string, now = new Date()): { day: number; d
 
 /** Categorias que fazem sentido orçamentar (sem receitas nem transferências). */
 export function expenseCategories<T extends { name: string; groupName: string }>(cats: T[]): T[] {
-  return cats.filter((c) => c.groupName !== "Receitas" && c.name !== "Transferências");
+  return cats.filter((c) => c.groupName !== "Receitas" && c.name !== "Transferências" && c.name !== INVESTMENT_CATEGORY);
 }
+
+/** Categoria cujos movimentos não são gasto nem receita: somam-se aos investimentos do Património. */
+export const INVESTMENT_CATEGORY = "Investimentos";
 
 /** Média de gasto mensal nos `n` meses completos anteriores a `month` (null se não houver nenhum). */
 export function averageMonthlySpend(flow: MonthFlow[], month: string, n = 3): number | null {

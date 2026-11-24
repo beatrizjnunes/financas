@@ -64,6 +64,13 @@
       "when": 1795291343570,
       "tag": "0008_foto_perfil",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795549664497,
+      "tag": "0009_reembolsos_investimentos",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { coupleBalance, normalizeShared, sharedAmount } from "@/lib/split";
+import { coupleBalance, myShareOf, normalizeShared, settlementsFrom, sharedAmount } from "@/lib/split";
 
 const ivo = { id: "ivo", name: "Ivo" };
 const bea = { id: "bea", name: "Bea" };
+
+describe("acertos de contas (Entre nós)", () => {
+  it("a renda paga pela Bea e a metade transferida pelo Ivo deixam-nos quites", () => {
+    const rent = [{ paidBy: "bea", amountCents: -95000 }];
+    expect(coupleBalance(rent, ivo, bea).debt).toEqual({ from: ivo, to: bea, cents: 47500 });
+    const s = settlementsFrom([{ ownerId: "bea", amountCents: 47500, date: "2026-11-02 10:00:00" }], "ivo", "bea");
+    expect(s).toEqual([{ from: "ivo", to: "bea", cents: 47500, date: "2026-11-02 10:00:00" }]);
+    expect(coupleBalance(rent, ivo, bea, 0.5, s).debt).toBeNull();
+  });
+  it("a mesma transferência vista dos dois lados conta uma vez", () => {
+    const s = settlementsFrom(
+      [
+        { ownerId: "ivo", amountCents: -47500, date: "2026-11-01 22:00:00" },
+        { ownerId: "bea", amountCents: 47500, date: "2026-11-02 09:00:00" },
+        { ownerId: "bea", amountCents: 2000, date: "2026-11-10 09:00:00" },
+      ],
+      "ivo",
+      "bea",
+    );
+    expect(s.map((x) => [x.from, x.cents])).toEqual([
+      ["ivo", 2000],
+      ["ivo", 47500],
+    ]);
+  });
+  it("transferir a mais passa a dívida para o outro lado", () => {
+    const s = [{ from: "ivo", to: "bea", cents: 60000, date: "2026-11-02" }];
+    expect(coupleBalance([{ paidBy: "bea", amountCents: -95000 }], ivo, bea, 0.5, s).debt).toEqual({ from: bea, to: ivo, cents: 12500 });
+  });
+});
+
+describe("a minha parte (análise pessoal)", () => {
+  const rows = [
+    { ownerId: "bea", scope: "pessoal", amountCents: -1000, sharedCents: null },
+    { ownerId: "bea", scope: "casal", amountCents: -95000, sharedCents: null },
+    { ownerId: "ivo", scope: "casal", amountCents: -8000, sharedCents: null },
+    { ownerId: "bea", scope: "casal", amountCents: -10000, sharedCents: 6000 },
+    { ownerId: "ivo", scope: "pessoal", amountCents: -500, sharedCents: null },
+  ];
+  it("pessoal inteiro, metade do partilhado de quem quer que tenha pago, o resto não partilhado inteiro", () => {
+    expect(myShareOf(rows, "bea").map((r) => r.amountCents)).toEqual([-1000, -47500, -4000, -4000, -3000]);
+    expect(myShareOf(rows, "ivo").map((r) => r.amountCents)).toEqual([-47500, -4000, -3000, -500]);
+  });
+});
 
 describe("parte partilhada", () => {
   it("sharedAmount mantém o sinal e não passa do total", () => {

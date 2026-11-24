@@ -24,6 +24,7 @@ import { requireUser } from "@/server/auth";
 import {
   countSuspended,
   countToReview,
+  coupleSettlements,
   coupleTransactions,
   listCategories,
   listPeople,
@@ -121,7 +122,7 @@ export default async function ResumoPage({ searchParams }: { searchParams: Promi
   let couple: React.ReactNode = null;
   if (people.length === 2 && coupleTx.length) {
     const [a, b] = people;
-    const bal = coupleBalance(coupleTx, { id: a.id, name: a.name }, { id: b.id, name: b.name });
+    const bal = coupleBalance(coupleTx, { id: a.id, name: a.name }, { id: b.id, name: b.name }, 0.5, await coupleSettlements(a.id, b.id));
     couple = !bal.debt ? (
       "Estão quites."
     ) : bal.debt.from.id === user.id ? (

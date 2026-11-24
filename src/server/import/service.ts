@@ -3,7 +3,7 @@ import { db, schema } from "../db";
 import { existingHashes, listCategories, myAccount, myDuplicateCandidates, peopleNames } from "../data";
 import type { Kind, Scope } from "@/lib/labels";
 import { BANK_LABEL } from "@/lib/labels";
-import { suggestCategoryName, suggestScope } from "./classify";
+import { isRefundRow, suggestCategoryName, suggestScope } from "./classify";
 import { candidateWindow, findPossibleDuplicate } from "./duplicates";
 import { hashRows } from "./hash";
 import { detectParser, parserForBank } from "./parsers";
@@ -147,6 +147,7 @@ export async function commitImport(
         categoryId: edit.categoryId && validCategories.has(edit.categoryId) ? edit.categoryId : null,
         scope: edit.scope,
         kind: edit.kind,
+        isRefund: isRefundRow(r),
         hash,
         duplicateOf,
       }));

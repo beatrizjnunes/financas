@@ -4,7 +4,7 @@ import { formatDate, formatEUR } from "@/lib/format";
 import { KIND_LABEL, KINDS } from "@/lib/labels";
 import { coupleBalance } from "@/lib/split";
 import { requireUser } from "@/server/auth";
-import { coupleTransactions, listPeople } from "@/server/data";
+import { coupleSettlements, coupleTransactions, listPeople } from "@/server/data";
 import { Card, CategoryBars, ColumnChart, EmptyState, Legend, PageHeader, SeriesKey, StackBar, StatTile, TableView } from "@/components/charts";
 import { MonthPicker, pickMonth } from "@/components/month-picker";
 import { Icon } from "@/components/icons";
@@ -47,8 +47,10 @@ export default async function PartilhadoPage({ searchParams }: { searchParams: P
     );
   }
 
-  // Saldo: tudo desde o início (os acertos de contas chegam na fase seguinte).
-  const balance = coupleBalance(txs, { id: a.id, name: a.name }, { id: b.id, name: b.name });
+  // Saldo: tudo desde o início, descontando o que um já transferiu ao outro (movimentos "Entre nós").
+  const settlements = await coupleSettlements(a.id, b.id);
+  const balance = coupleBalance(txs, { id: a.id, name: a.name }, { id: b.id, name: b.name }, 0.5, settlements);
+  const sentBy = (id: string) => settlements.filter((s) => s.from === id).reduce((t, s) => t + s.cents, 0);
   const since = txs.at(-1)!.date;
 
   const months: string[] = [];
@@ -98,13 +100,38 @@ export default async function PartilhadoPage({ searchParams }: { searchParams: P
               <span className="text-ink-3">
                 pagou <span className="num text-ink">{formatEUR(p.paidCents)}</span> · cabia-lhe{" "}
                 <span className="num text-ink">{formatEUR(p.shareCents)}</span>
+                {sentBy(p.id) > 0 && (
+                  <>
+                    {" "}
+                    · transferiu <span className="num text-ink">{formatEUR(sentBy(p.id))}</span>
+                  </>
+                )}
               </span>
             </div>
           ))}
         </div>
+        {settlements.length > 0 && (
+          <details className="mt-5 rounded-xl bg-surface-2 px-4 py-3 text-sm">
+            <summary className="cursor-pointer text-ink-2">
+              {settlements.length} {settlements.length === 1 ? "acerto de contas" : "acertos de contas"} (transferências “Entre nós”)
+            </summary>
+            <ul className="mt-2 divide-y divide-line">
+              {settlements.slice(0, 20).map((s, i) => (
+                <li key={i} className="flex items-center gap-2 py-2">
+                  <span className="num w-12 shrink-0 text-xs text-ink-3">{formatDate(s.date).slice(0, 5)}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {nameOf(s.from)} → {nameOf(s.to)}
+                  </span>
+                  <span className="num font-medium">{formatEUR(s.cents)}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <p className="mt-4 text-xs text-ink-3">
-          Total partilhado: {formatEUR(balance.totalCents)}. Se só parte de uma despesa for
-          partilhada, divide-a no detalhe do movimento.
+          Total partilhado: {formatEUR(balance.totalCents)}. Quando um paga e o outro lhe transfere a parte dele, marca essa
+          transferência como <b className="font-medium text-ink-2">Entre nós</b>: conta como acerto e o saldo fica certo. Se só parte de
+          uma despesa for partilhada, divide-a no detalhe do movimento.
         </p>
       </section>
 

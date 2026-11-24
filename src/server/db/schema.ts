@@ -89,6 +89,13 @@ export const transactions = sqliteTable(
      * null = o valor todo. O resto conta como pessoal de quem pagou.
      */
     sharedCents: integer("shared_cents"),
+    /**
+     * Entrada que devolve dinheiro de uma despesa (devolução de loja, amigo que paga a parte dele…):
+     * desconta no gasto da categoria em vez de contar como receita.
+     */
+    isRefund: integer("is_refund", { mode: "boolean" }).notNull().default(false),
+    /** Movimento da categoria Investimentos associado a um investimento do Património. */
+    investmentId: text("investment_id"),
     hash: text("hash").notNull(),
     /**
      * Possível duplicado de outro movimento (mesmo valor, mesma hora). Enquanto estiver preenchido

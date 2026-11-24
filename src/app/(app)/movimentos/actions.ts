@@ -13,6 +13,7 @@ import {
   markAllReviewed,
   resolveMyDuplicates,
   setMySharedPart,
+  setMyTxInvestment,
   updateMyTransactions,
   updateMyTxDetails,
 } from "@/server/data";
@@ -25,6 +26,7 @@ const Input = z.object({
       kind: z.enum(KINDS),
       categoryId: z.string().nullable(),
       needsReview: z.literal(false),
+      isRefund: z.boolean(),
     })
     .partial(),
 });
@@ -48,6 +50,14 @@ export async function setSharedPartAction(input: unknown) {
 }
 
 const Ids = z.array(z.string().min(1)).min(1).max(5000);
+
+/** Associa um movimento da categoria Investimentos a um investimento do Património (null = nenhum). */
+export async function setTxInvestmentAction(input: unknown) {
+  const user = await requireUser();
+  const { id, investmentId } = z.object({ id: z.string().min(1), investmentId: z.string().min(1).nullable() }).parse(input);
+  await setMyTxInvestment(user.id, id, investmentId);
+  revalidatePath("/", "layout");
+}
 
 export async function deleteTransactionsAction(ids: unknown) {
   const user = await requireUser();

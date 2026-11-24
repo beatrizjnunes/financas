@@ -129,7 +129,18 @@ function AccountLine({ a }: { a: AccountRow }) {
 
 /* ---------- investimentos ---------- */
 
-export type InvestmentRow = { id: string; name: string; type: InvestmentType; investedCents: number; valueCents: number; updatedAt: string | null };
+export type InvestmentRow = {
+  id: string;
+  name: string;
+  type: InvestmentType;
+  /** Total investido = baseCents (antes da app) + fromTxCents (aportes dos movimentos). */
+  investedCents: number;
+  baseCents: number;
+  fromTxCents: number;
+  fromTxCount: number;
+  valueCents: number;
+  updatedAt: string | null;
+};
 
 export function InvestmentsEditor({ items }: { items: InvestmentRow[] }) {
   const [editing, setEditing] = useState<string | "new" | null>(null);
@@ -175,6 +186,11 @@ function InvestmentLine({ i, onEdit }: { i: InvestmentRow; onEdit: () => void })
           {INVESTMENT_LABEL[i.type]} · investido {formatEUR(i.investedCents)}
           {i.updatedAt && <> · valor a {formatDate(i.updatedAt)}</>}
         </p>
+        {i.fromTxCount > 0 && (
+          <p className="truncate text-xs text-accent">
+            inclui {formatEUR(i.fromTxCents)} de {i.fromTxCount} {i.fromTxCount === 1 ? "movimento" : "movimentos"}
+          </p>
+        )}
       </div>
       <div className="text-right">
         <p className="num text-sm font-semibold">{formatEUR(i.valueCents)}</p>
@@ -193,7 +209,7 @@ function InvestmentLine({ i, onEdit }: { i: InvestmentRow; onEdit: () => void })
 function InvestmentForm({ item, onDone }: { item?: InvestmentRow; onDone: () => void }) {
   const [name, setName] = useState(item?.name ?? "");
   const [type, setType] = useState<InvestmentType>(item?.type ?? "etf");
-  const [invested, setInvested] = useState(toInput(item?.investedCents));
+  const [invested, setInvested] = useState(toInput(item?.baseCents));
   const [value, setValue] = useState(toInput(item?.valueCents));
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -207,12 +223,13 @@ function InvestmentForm({ item, onDone }: { item?: InvestmentRow; onDone: () => 
       setErr("Confirma os valores.");
       return;
     }
-    if (!name.trim() || inv == null) {
-      setErr("Falta o nome ou o valor investido.");
+    if (!name.trim()) {
+      setErr("Falta o nome.");
       return;
     }
+    const base = inv ?? 0;
     start(async () => {
-      await saveInvestmentAction({ id: item?.id, name: name.trim(), type, investedCents: inv!, valueCents: val ?? inv! });
+      await saveInvestmentAction({ id: item?.id, name: name.trim(), type, investedCents: base, valueCents: val ?? base + (item?.fromTxCents ?? 0) });
       onDone();
     });
   }
@@ -228,8 +245,8 @@ function InvestmentForm({ item, onDone }: { item?: InvestmentRow; onDone: () => 
         ))}
       </select>
       <div className="grid grid-cols-2 gap-2">
-        <label className="text-[11px] text-ink-3">
-          Investido
+        <label className="text-[11px] text-ink-3" title="O que puseste lá antes de usares a app. Os aportes dos movimentos somam-se sozinhos.">
+          Investido antes
           <EuroInput value={invested} onChange={setInvested} placeholder="0" />
         </label>
         <label className="text-[11px] text-ink-3">
@@ -237,6 +254,10 @@ function InvestmentForm({ item, onDone }: { item?: InvestmentRow; onDone: () => 
           <EuroInput value={value} onChange={setValue} placeholder="= investido" />
         </label>
       </div>
+      <p className="text-[11px] text-ink-3 sm:col-span-2">
+        Os movimentos da categoria <b className="font-medium">Investimentos</b> associados a este investimento somam-se sozinhos
+        {item && item.fromTxCount > 0 ? ` (já tem ${formatEUR(item.fromTxCents)})` : ""}.
+      </p>
       {err && <p className="text-xs text-danger sm:col-span-2">{err}</p>}
       <div className="flex items-center gap-2 sm:col-span-2">
         <button onClick={save} disabled={pending} className="btn-primary h-9 px-4">

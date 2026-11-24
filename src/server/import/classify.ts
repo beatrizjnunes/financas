@@ -33,9 +33,6 @@ export function suggestScope(row: ParsedRow, people: People): Scope {
   if (row.bankType === "Topup" && /(?:top-up by|Apple Pay através de) \*\d+/i.test(row.descriptionOriginal)) return "interna";
   // …e o mesmo carregamento visto do lado do ING ("Revolut**1552* Dublin IRL").
   if (row.amountCents < 0 && /^Revolut\*/i.test(row.descriptionOriginal)) return "interna";
-  // Dinheiro posto numa corretora/plataforma de investimento continua a ser teu (ver Património → Investimentos).
-  if (row.amountCents < 0 && /trading\s?212|degiro|go and grow|bondora|\bxtb\b|interactive brokers|lightyear/i.test(row.descriptionOriginal))
-    return "interna";
   // …e do lado da Caixa ("CAR WAL REVOLUT 6408").
   if (row.amountCents < 0 && /^CAR WAL REVOLUT\b/i.test(row.descriptionOriginal)) return "interna";
   // Albert Heijn: em dias úteis das 9h às 18h é o almoço/lanche de cada um; fora disso são compras da casa.
@@ -69,10 +66,20 @@ const KEYWORDS: [RegExp, string][] = [
   [/evides|waterbedrijf|vattenfall|eneco|essent|greenchoice/i, "Contas da casa"],
 ];
 
+/** Corretoras e plataformas de investimento: o dinheiro que lá entra não é gasto (categoria Investimentos). */
+const BROKERS = /trading\s?212|degiro|go and grow|bondora|\bxtb\b|interactive brokers|lightyear|trade republic|scalable capital|bitvavo|coinbase/i;
+
+/** Devoluções de lojas (Revolut "Card Refund", Caixa "CRD VCHER"): descontam no gasto em vez de serem receita. */
+export function isRefundRow(row: ParsedRow): boolean {
+  return row.amountCents > 0 && (row.bankType === "Card Refund" || /^CRD VCHER\b/i.test(row.descriptionOriginal));
+}
+
 export function suggestCategoryName(row: ParsedRow, scope: Scope): string | null {
   if (scope === "interna" || scope === "entre_nos") return "Transferências";
+  if (BROKERS.test(`${row.descriptionOriginal} ${row.counterparty ?? ""}`)) return "Investimentos";
   if (row.feeCents > 0 && row.amountCents === -row.feeCents) return "Comissões bancárias";
-  if (row.amountCents > 0) return "Outras receitas";
+  // Uma devolução fica na categoria da loja (para descontar lá); as outras entradas são receitas.
+  if (row.amountCents > 0 && !isRefundRow(row)) return "Outras receitas";
   const text = `${row.descriptionOriginal} ${row.counterparty ?? ""}`.trim();
   for (const [re, name] of KEYWORDS) if (re.test(text)) return name;
   return null;

@@ -4,7 +4,8 @@ import "server-only";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lte, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { Kind, Scope } from "@/lib/labels";
-import { normalizeShared, sharedAmount } from "@/lib/split";
+import { INVESTMENT_CATEGORY } from "@/lib/analytics";
+import { myShareOf, normalizeShared, settlementsFrom, sharedAmount } from "@/lib/split";
 import type { DuplicateCandidate } from "../import/duplicates";
 import { db, schema } from "../db";
 
@@ -89,8 +90,12 @@ export async function myDuplicateCandidates(
 /** Movimentos não apagados. (Os apagados só servem para a deduplicação das importações e para restaurar.) */
 const alive = () => isNull(transactions.deletedAt);
 
-/** Só os movimentos que contam: Pessoal ou Casal, não apagados e que não estejam em suspenso por possível duplicado. */
-const counts = () => and(inArray(transactions.scope, ["pessoal", "casal"]), isNull(transactions.duplicateOf), alive());
+/** Movimentos da categoria Investimentos não são gasto nem receita (o dinheiro continua a ser teu). */
+const notInvestment = () =>
+  sql`(${transactions.categoryId} is null or ${transactions.categoryId} not in (select id from categories where name = ${INVESTMENT_CATEGORY}))`;
+
+/** Só os movimentos que contam: Pessoal ou Casal, não apagados, fora de Investimentos e que não estejam em suspenso por possível duplicado. */
+const counts = () => and(inArray(transactions.scope, ["pessoal", "casal"]), isNull(transactions.duplicateOf), alive(), notInvestment());
 
 export type TxFilters = {
   q?: string;
@@ -148,6 +153,8 @@ export async function myTransactions(userId: string, f: TxFilters = {}) {
       kind: transactions.kind,
       sharedCents: transactions.sharedCents,
       bankType: transactions.bankType,
+      isRefund: transactions.isRefund,
+      investmentId: transactions.investmentId,
       bankDescription: transactions.description,
       customDescription: transactions.customDescription,
       notes: transactions.notes,
@@ -179,7 +186,7 @@ export async function myTransactions(userId: string, f: TxFilters = {}) {
     .all();
 }
 
-export type TxPatch = { scope?: Scope; kind?: Kind; categoryId?: string | null; needsReview?: boolean };
+export type TxPatch = { scope?: Scope; kind?: Kind; categoryId?: string | null; needsReview?: boolean; isRefund?: boolean };
 
 /**
  * Atualiza movimentos — só os do próprio utilizador (os ids de outros são ignorados).
@@ -187,6 +194,11 @@ export type TxPatch = { scope?: Scope; kind?: Kind; categoryId?: string | null; 
  */
 export async function updateMyTransactions(userId: string, ids: string[], patch: TxPatch) {
   if (!ids.length) return 0;
+  // Ao sair da categoria Investimentos, o aporte sai também do investimento associado.
+  if (patch.categoryId !== undefined) {
+    const inv = await db.select({ id: categories.id }).from(categories).where(eq(categories.name, INVESTMENT_CATEGORY)).get();
+    if (patch.categoryId !== inv?.id) await unlinkInvestments(userId, ids);
+  }
   // Ao deixar de ser Partilhado, a divisão deixa de fazer sentido.
   const extra = patch.scope && patch.scope !== "casal" ? { sharedCents: null } : {};
   const res = await db
@@ -279,6 +291,7 @@ export async function countDeleted(userId: string) {
 /** Apaga (esconde) movimentos do próprio. Continuam a impedir que a mesma linha volte a ser importada. */
 export async function deleteMyTransactions(userId: string, ids: string[]) {
   if (!ids.length) return 0;
+  await unlinkInvestments(userId, ids);
   const now = new Date().toISOString();
   const res = await db
     .update(transactions)
@@ -320,12 +333,19 @@ export async function countToReview(userId: string) {
   return row?.n ?? 0;
 }
 
-/** Movimentos do próprio que contam como despesa/receita (Pessoal + Casal, fora de suspenso), para a Análise. */
+/**
+ * O que é do utilizador, para a Análise, Orçamentos e Resumo: os seus movimentos Pessoais e a sua parte
+ * de todos os Partilhados (metade da parte partilhada, tenha pago ele ou o outro; mais o resto, se só parte
+ * era partilhada). Os Partilhados do outro só expõem o que já é visível na página Partilhado.
+ */
 export async function myCountedTransactions(userId: string) {
-  return db
+  const rows = await db
     .select({
+      ownerId: transactions.ownerId,
       date: transactions.date,
       amountCents: transactions.amountCents,
+      sharedCents: transactions.sharedCents,
+      refund: transactions.isRefund,
       description: displayName,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
@@ -334,9 +354,20 @@ export async function myCountedTransactions(userId: string) {
     })
     .from(transactions)
     .leftJoin(categories, eq(categories.id, transactions.categoryId))
-    .where(and(eq(transactions.ownerId, userId), counts()))
+    .where(and(or(eq(transactions.ownerId, userId), eq(transactions.scope, "casal")), counts()))
     .orderBy(asc(transactions.date))
     .all();
+  return myShareOf(rows, userId);
+}
+
+/** Transferências "Entre nós" dos dois, como acertos de contas para o saldo partilhado. */
+export async function coupleSettlements(a: string, b: string) {
+  const rows = await db
+    .select({ ownerId: transactions.ownerId, amountCents: transactions.amountCents, date: transactions.date })
+    .from(transactions)
+    .where(and(eq(transactions.scope, "entre_nos"), isNull(transactions.duplicateOf), alive()))
+    .all();
+  return settlementsFrom(rows, a, b);
 }
 
 /** Últimos movimentos que contam, para o Resumo. */
@@ -468,10 +499,87 @@ export async function deleteMyManualTransaction(userId: string, id: string) {
 
 /* ---------- investimentos e objetivos ---------- */
 
+/**
+ * Investimentos do utilizador, com o que entrou pelos movimentos: `fromTxCents` = aportes associados
+ * (saídas da categoria Investimentos; vendas/resgates descontam). `investedCents` passa a ser o total
+ * (o que já tinha antes + aportes) e `baseCents` o valor escrito à mão.
+ */
 export async function myInvestments(userId: string) {
-  return db.select().from(investments).where(eq(investments.userId, userId)).orderBy(desc(investments.valueCents)).all();
+  const [list, linked] = await Promise.all([
+    db.select().from(investments).where(eq(investments.userId, userId)).orderBy(desc(investments.valueCents)).all(),
+    db
+      .select({ investmentId: transactions.investmentId, amountCents: transactions.amountCents })
+      .from(transactions)
+      .where(and(eq(transactions.ownerId, userId), isNotNull(transactions.investmentId), alive()))
+      .all(),
+  ]);
+  const byInv = new Map<string, { cents: number; n: number }>();
+  for (const t of linked) {
+    const cur = byInv.get(t.investmentId!) ?? { cents: 0, n: 0 };
+    cur.cents += -t.amountCents;
+    cur.n += 1;
+    byInv.set(t.investmentId!, cur);
+  }
+  return list.map((i) => {
+    const l = byInv.get(i.id) ?? { cents: 0, n: 0 };
+    return { ...i, baseCents: i.investedCents, fromTxCents: l.cents, fromTxCount: l.n, investedCents: i.investedCents + l.cents };
+  });
 }
 
+async function unlinkInvestments(userId: string, ids: string[]) {
+  const linked = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.ownerId, userId), inArray(transactions.id, ids), isNotNull(transactions.investmentId)))
+    .all();
+  for (const t of linked) await setMyTxInvestment(userId, t.id, null);
+}
+
+/** Movimentos da categoria Investimentos ainda sem investimento associado. */
+export async function myUnlinkedInvestmentTxs(userId: string) {
+  return db
+    .select({ id: transactions.id, date: transactions.date, description: displayName, amountCents: transactions.amountCents })
+    .from(transactions)
+    .innerJoin(categories, eq(categories.id, transactions.categoryId))
+    .where(and(eq(transactions.ownerId, userId), eq(categories.name, INVESTMENT_CATEGORY), isNull(transactions.investmentId), alive()))
+    .orderBy(desc(transactions.date))
+    .all();
+}
+
+/**
+ * Associa (ou desassocia, com null) um movimento a um investimento do próprio. O valor atual do
+ * investimento acompanha o aporte (o dinheiro entra lá), para o ganho/perda não ficar errado.
+ */
+export async function setMyTxInvestment(userId: string, txId: string, investmentId: string | null) {
+  const tx = await db
+    .select({ amountCents: transactions.amountCents, investmentId: transactions.investmentId })
+    .from(transactions)
+    .where(and(eq(transactions.id, txId), eq(transactions.ownerId, userId)))
+    .get();
+  if (!tx || tx.investmentId === investmentId) return;
+  if (investmentId) {
+    const inv = await db.select({ id: investments.id }).from(investments).where(and(eq(investments.id, investmentId), eq(investments.userId, userId))).get();
+    if (!inv) return;
+  }
+  const move = async (id: string, delta: number) => {
+    const inv = await db.select({ valueCents: investments.valueCents }).from(investments).where(and(eq(investments.id, id), eq(investments.userId, userId))).get();
+    if (inv)
+      await db
+        .update(investments)
+        .set({ valueCents: Math.max(0, inv.valueCents + delta), updatedAt: new Date().toISOString() })
+        .where(eq(investments.id, id))
+        .run();
+  };
+  if (tx.investmentId) await move(tx.investmentId, tx.amountCents); // tira o aporte do antigo
+  if (investmentId) await move(investmentId, -tx.amountCents); // soma ao novo
+  await db
+    .update(transactions)
+    .set({ investmentId, needsReview: false, updatedAt: new Date().toISOString() })
+    .where(and(eq(transactions.id, txId), eq(transactions.ownerId, userId)))
+    .run();
+}
+
+/** `investedCents` aqui é só o que foi investido fora dos movimentos (antes de usar a app). */
 export type InvestmentInput = { id?: string; name: string; type: (typeof investments.$inferInsert)["type"]; investedCents: number; valueCents: number };
 
 export async function saveMyInvestment(userId: string, i: InvestmentInput) {
@@ -587,7 +695,7 @@ export async function coupleTransactions() {
     })
     .from(transactions)
     .leftJoin(categories, eq(categories.id, transactions.categoryId))
-    .where(and(eq(transactions.scope, "casal"), isNull(transactions.duplicateOf), alive()))
+    .where(and(eq(transactions.scope, "casal"), isNull(transactions.duplicateOf), alive(), notInvestment()))
     .orderBy(desc(transactions.date))
     .all();
   // amountCents passa a ser só a parte partilhada; o total original fica em fullAmountCents.

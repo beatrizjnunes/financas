@@ -17,6 +17,7 @@ import {
   resolveDuplicatesAction,
   restoreTransactionsAction,
   setSharedPartAction,
+  setTxInvestmentAction,
   updateTransactionsAction,
 } from "./actions";
 import { SharedPart } from "./shared-part";
@@ -34,6 +35,8 @@ export type TxRow = {
   kind: Kind;
   sharedCents: number | null;
   bankType: string | null;
+  isRefund: boolean;
+  investmentId: string | null;
   bank: string;
   bankDescription: string;
   customDescription: string | null;
@@ -52,20 +55,28 @@ export type TxRow = {
   original: { date: string | null; description: string | null; accountName: string | null } | null;
 };
 
-type Patch = Partial<Pick<TxRow, "scope" | "kind" | "categoryId" | "duplicateOf" | "sharedCents">> & { needsReview?: false };
+type Patch = Partial<Pick<TxRow, "scope" | "kind" | "categoryId" | "duplicateOf" | "sharedCents" | "isRefund" | "investmentId">> & {
+  needsReview?: false;
+};
 
 export function TxList({
   rows,
   categories,
   showAccount,
   deletedView = false,
+  investments = [],
+  investmentCategoryId = null,
 }: {
   rows: TxRow[];
   categories: CategoryOption[];
   showAccount: boolean;
   /** Vista "Apagados": cada linha tem Restaurar (e Apagar de vez, se for manual). */
   deletedView?: boolean;
+  investments?: { id: string; name: string }[];
+  investmentCategoryId?: string | null;
 }) {
+  /** Conta nos totais: Pessoal/Partilhado, fora de Investimentos e de suspenso. Reembolsos descontam no gasto. */
+  const counts = (r: TxRow) => COUNTED_SCOPES.includes(r.scope) && !r.duplicateOf && r.categoryId !== investmentCategoryId;
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
@@ -120,6 +131,18 @@ export function TxList({
       </button>
     </div>
   );
+
+  function updateInvestment(id: string, investmentId: string | null) {
+    setError(null);
+    startTransition(async () => {
+      apply({ ids: [id], patch: { investmentId } });
+      try {
+        await setTxInvestmentAction({ id, investmentId });
+      } catch {
+        setError("Não consegui associar ao investimento. Tenta outra vez.");
+      }
+    });
+  }
 
   function updateShared(id: string, cents: number | null) {
     setError(null);
@@ -196,6 +219,9 @@ export function TxList({
           onPatch={(p) => update([openTx.id], p)}
           onShared={(c) => updateShared(openTx.id, c)}
           onDelete={() => removeRows([openTx.id], openTx.deletedAt ? "restaurar" : "apagar")}
+          investments={investments}
+          investmentCategoryId={investmentCategoryId}
+          onInvestment={(id) => updateInvestment(openTx.id, id)}
         />
       )}
       {undoBar}
@@ -215,7 +241,7 @@ export function TxList({
       <div className="overflow-hidden card">
         {days.map(({ day, rows }) => {
           const net = rows
-            .filter((r) => COUNTED_SCOPES.includes(r.scope) && !r.duplicateOf)
+            .filter(counts)
             .reduce((s, r) => s + r.amountCents, 0);
           const allOn = rows.every((r) => selected.has(r.id));
           return (
@@ -233,7 +259,8 @@ export function TxList({
               </header>
               <ul className="divide-y divide-line">
                 {rows.map((r) => {
-                  const counted = COUNTED_SCOPES.includes(r.scope) && !r.duplicateOf;
+                  const counted = counts(r);
+                  const inv = r.categoryId === investmentCategoryId ? investments.find((i) => i.id === r.investmentId) : undefined;
                   return (
                     <li
                       key={r.id}
@@ -255,6 +282,10 @@ export function TxList({
                         >
                           <span className="truncate">{r.description}</span>
                           {r.customDescription && <Icon name="pencil" className="size-3 shrink-0 text-warn" />}
+                          {r.isRefund && r.amountCents > 0 && <span className="chip chip-pos shrink-0">Reembolso</span>}
+                          {r.categoryId && r.categoryId === investmentCategoryId && (
+                            <span className="chip shrink-0 bg-accent-soft text-accent-strong">{inv ? `📈 ${inv.name}` : "📈 Investimento"}</span>
+                          )}
                           {r.notes && <span className="shrink-0 text-xs text-ink-3" aria-label="Tem nota">📝</span>}
                         </button>
                         <p className="truncate text-xs text-ink-3">

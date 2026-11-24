@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { INVESTMENT_CATEGORY } from "@/lib/analytics";
 import { formatEUR, parseAmountToCents } from "@/lib/format";
 import { COUNTED_SCOPES, SCOPES, type Scope } from "@/lib/labels";
 import { requireUser } from "@/server/auth";
@@ -10,6 +11,7 @@ import {
   hasAnyTransactions,
   listCategories,
   myAccounts,
+  myInvestments,
   myTransactions,
   type TxFilters,
 } from "@/server/data";
@@ -55,7 +57,7 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
   const user = await requireUser();
   const sp = await searchParams;
   const filters = readFilters(sp);
-  const [accounts, categories, rows, hasAny, toReview, suspended, deletedCount] = await Promise.all([
+  const [accounts, categories, rows, hasAny, toReview, suspended, deletedCount, investments] = await Promise.all([
     myAccounts(user.id),
     listCategories(),
     myTransactions(user.id, filters),
@@ -63,12 +65,15 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
     countToReview(user.id),
     countSuspended(user.id),
     countDeleted(user.id),
+    myInvestments(user.id),
   ]);
   const imported = typeof sp.importados === "string" ? Number(sp.importados) : null;
 
-  const counted = rows.filter((r) => COUNTED_SCOPES.includes(r.scope) && !r.duplicateOf);
-  const income = counted.filter((r) => r.amountCents > 0).reduce((s, r) => s + r.amountCents, 0);
-  const spent = counted.filter((r) => r.amountCents < 0).reduce((s, r) => s + r.amountCents, 0);
+  const investmentCategoryId = categories.find((c) => c.name === INVESTMENT_CATEGORY)?.id ?? null;
+  const counted = rows.filter((r) => COUNTED_SCOPES.includes(r.scope) && !r.duplicateOf && r.categoryId !== investmentCategoryId);
+  // Reembolsos descontam nas saídas em vez de contarem como entradas.
+  const income = counted.filter((r) => r.amountCents > 0 && !r.isRefund).reduce((s, r) => s + r.amountCents, 0);
+  const spent = counted.filter((r) => r.amountCents < 0 || r.isRefund).reduce((s, r) => s + r.amountCents, 0);
 
   return (
     <div>
@@ -158,6 +163,8 @@ export default async function MovimentosPage({ searchParams }: { searchParams: P
             categories={categories.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName }))}
             showAccount={accounts.length > 1}
             deletedView={!!filters.deleted}
+            investments={investments.map((i) => ({ id: i.id, name: i.name }))}
+            investmentCategoryId={investmentCategoryId}
           />
           <p className="mt-4 text-xs text-ink-3">
             {rows.length} {rows.length === 1 ? "movimento" : "movimentos"}.

@@ -17,12 +17,18 @@ export function TxDetail({
   onPatch,
   onShared,
   onDelete,
+  investments,
+  investmentCategoryId,
+  onInvestment,
 }: {
   tx: TxRow;
   categories: CategoryOption[];
   onClose: () => void;
-  onPatch: (p: { scope?: Scope; kind?: Kind; categoryId?: string | null }) => void;
+  onPatch: (p: { scope?: Scope; kind?: Kind; categoryId?: string | null; isRefund?: boolean }) => void;
   onShared: (cents: number | null) => void;
+  investments: { id: string; name: string }[];
+  investmentCategoryId: string | null;
+  onInvestment: (investmentId: string | null) => void;
   /** Apaga o movimento (ou restaura, se já estiver apagado). */
   onDelete: () => void;
 }) {
@@ -124,8 +130,52 @@ export function TxDetail({
               <p className="mb-1.5 text-xs font-medium text-ink-2">Âmbito</p>
               <ScopeSelect value={tx.scope} onChange={(scope) => onPatch({ scope })} />
             </div>
-            <p className="col-span-2 text-xs text-ink-3">{SCOPE_HINT[tx.scope]}</p>
+            <p className="col-span-2 text-xs text-ink-3">
+              {SCOPE_HINT[tx.scope]}
+              {tx.scope === "entre_nos" && " Conta como acerto de contas no saldo partilhado."}
+            </p>
           </div>
+
+          {tx.categoryId && tx.categoryId === investmentCategoryId && (
+            <div className="mt-4 rounded-xl bg-accent-soft px-4 py-3">
+              <p className="text-xs font-medium text-accent-strong">Investimento · não conta como gasto</p>
+              {investments.length ? (
+                <label className="mt-2 block">
+                  <span className="mb-1 block text-xs text-ink-2">Para que investimento foi?</span>
+                  <select value={tx.investmentId ?? ""} onChange={(e) => onInvestment(e.target.value || null)} className="select h-9 w-full">
+                    <option value="">Ainda não associado</option>
+                    {investments.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-xs text-ink-3">O valor soma-se ao investido (e ao valor atual) desse investimento no Património.</span>
+                </label>
+              ) : (
+                <p className="mt-1 text-xs text-ink-2">
+                  Cria o investimento em{" "}
+                  <a href="/patrimonio" className="font-medium underline">
+                    Património
+                  </a>{" "}
+                  para lhe associares este movimento.
+                </p>
+              )}
+            </div>
+          )}
+
+          {tx.amountCents > 0 && tx.categoryId !== investmentCategoryId && (
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-surface-2 px-4 py-3">
+              <input type="checkbox" className="mt-0.5" checked={tx.isRefund} onChange={(e) => onPatch({ isRefund: e.target.checked })} />
+              <span>
+                <span className="block text-sm font-medium">É um reembolso / devolução</span>
+                <span className="block text-xs text-ink-3">
+                  Desconta no gasto da categoria escolhida em vez de contar como receita. Ex.: um amigo devolve-te a parte dele do jantar → categoria
+                  Restaurantes.
+                </span>
+              </span>
+            </label>
+          )}
 
           {tx.scope === "casal" && tx.amountCents < 0 && (
             <div className="mt-4 rounded-xl bg-surface-2 px-4 py-3">

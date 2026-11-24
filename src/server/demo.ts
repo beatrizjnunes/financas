@@ -44,6 +44,7 @@ type Tx = {
   notes?: string;
   custom?: string;
   manual?: boolean;
+  refund?: boolean;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -101,8 +102,8 @@ export async function loadDemo(now = new Date()) {
     if (day === 1) {
       add({ acc: A.beaCaixa.id, owner: bea.id, date: at(9), name: "Empresa Lda - Salário", cents: 215000 + (monthIdx === 6 ? 107500 : 0), cat: "Salário", kind: "fixa" });
       add({ acc: A.ivoIng.id, owner: ivo.id, date: at(10), name: "Transferência Senhorio - Renda", cents: -95000, cat: "Renda", scope: "casal", kind: "fixa" });
-      add({ acc: A.beaCaixa.id, owner: bea.id, date: at(11), name: "Transferência para Revolut", cents: -50000, cat: "Transferências", scope: "interna", kind: "fixa" });
-      add({ acc: A.beaRev.id, owner: bea.id, date: at(11), name: "Carregamento de Caixa", cents: 50000, cat: "Transferências", scope: "interna", kind: "fixa" });
+      add({ acc: A.beaCaixa.id, owner: bea.id, date: at(11), name: "Transferência para Revolut", cents: -75000, cat: "Transferências", scope: "interna", kind: "fixa" });
+      add({ acc: A.beaRev.id, owner: bea.id, date: at(11), name: "Carregamento de Caixa", cents: 75000, cat: "Transferências", scope: "interna", kind: "fixa" });
     }
     if (day === 26) {
       add({ acc: A.ivoIng.id, owner: ivo.id, date: at(12), name: "Transferência para Revolut", cents: -60000, cat: "Transferências", scope: "interna", kind: "fixa" });
@@ -125,6 +126,8 @@ export async function loadDemo(now = new Date()) {
     if (day === 20) add({ acc: A.ivoIng.id, owner: ivo.id, date: at(10), name: "Fidelidade Seguro Casa", cents: -1840, cat: "Seguros", scope: "casal", kind: "fixa" });
     if (day === 28) add({ acc: A.ivoIng.id, owner: ivo.id, date: at(23), name: "Comissão manutenção conta", cents: -416, cat: "Comissões bancárias", kind: "fixa" });
     if (day === 14) add({ acc: A.beaCaixa.id, owner: bea.id, date: at(12), name: "Cabeleireiro Rosa", cents: -between(2500, 4500), cat: "Saúde e beleza" });
+    // Investimento mensal (categoria Investimentos: não é gasto; associa-se ao ETF no Património)
+    if (day === 3) add({ acc: A.beaRev.id, owner: bea.id, date: at(9), name: "Trading 212", cents: -20000, cat: "Investimentos", kind: "fixa" });
 
     // Supermercado: ~2× por semana cada um
     if ((wd === 6 || wd === 3) && rnd() < 0.85) {
@@ -185,6 +188,11 @@ export async function loadDemo(now = new Date()) {
   add({ acc: A.beaRev.id, owner: bea.id, date: `${m(6, 12)} 20:15:40`, name: "MBWAY 912345678", cents: -3200, cat: "Restaurantes", custom: "Jantar de anos da Joana", notes: "A Joana pagou o restaurante e eu transferi a minha parte." });
   add({ acc: A.ivoRev.id, owner: ivo.id, date: `${m(5, 20)} 18:00:00`, name: "IKEA Alfragide", cents: -28950, cat: "Casa", scope: "casal", kind: "pontual", shared: 20000, notes: "O candeeiro (89,50 €) era para o meu escritório." });
   add({ acc: A.beaCaixa.id, owner: bea.id, date: `${m(7, 1)} 16:00:00`, name: "Prenda aniversário mãe", cents: -6000, cat: "Presentes", kind: "pontual" });
+  // Pagaste o jantar todo e o amigo devolveu a parte dele (reembolso → desconta em Restaurantes)
+  add({ acc: A.beaRev.id, owner: bea.id, date: `${m(6, 20)} 22:10:00`, name: "Restaurante Zé da Mouraria", cents: -6400, cat: "Restaurantes", notes: "Paguei o jantar com o Rui; ele devolveu a parte dele." });
+  add({ acc: A.beaRev.id, owner: bea.id, date: `${m(6, 21)} 10:02:00`, name: "Transferência de Rui Costa", cents: 3200, cat: "Restaurantes", refund: true, custom: "Rui devolveu o jantar" });
+  // Devolução de uma loja
+  add({ acc: A.beaRev.id, owner: bea.id, date: `${m(5, 8)} 17:20:00`, name: "Zara", cents: 3999, cat: "Roupa e compras", refund: true, notes: "Devolvi as calças." });
 
   // Os mais recentes ficam por rever (alguns sem categoria)
   txs.sort((a, b) => a.date.localeCompare(b.date));
@@ -223,6 +231,7 @@ export async function loadDemo(now = new Date()) {
       scope: t.scope ?? "pessoal",
       kind: t.kind ?? "variavel",
       sharedCents: t.scope === "casal" && t.shared ? t.shared : null,
+      isRefund: !!t.refund,
       notes: t.notes ?? null,
       hash: `demo-${i}`,
       needsReview: isRecent,

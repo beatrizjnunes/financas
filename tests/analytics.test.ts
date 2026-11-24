@@ -164,6 +164,26 @@ describe("recurringExpenses", () => {
   });
 });
 
+describe("reembolsos", () => {
+  // Jantar de 60 € e o amigo devolve 30 € (marcado como reembolso, categoria Restaurantes).
+  const r = [
+    tx("2026-10-01", 200000, "Salário", "Empresa"),
+    tx("2026-10-10", -6000, "Restaurantes", "Tasco"),
+    { ...tx("2026-10-11", 3000, "Restaurantes", "MB WAY Joana"), refund: true },
+  ];
+  it("descontam no gasto da categoria e não contam como receita", () => {
+    const oct = monthlyFlow(r).at(-1)!;
+    expect(oct.incomeCents).toBe(200000);
+    expect(oct.spentCents).toBe(3000);
+    expect(spendByCategory(r, "2026-10").find((c) => c.name === "Restaurantes")?.cents).toBe(3000);
+    expect(cumulativeByDay(r, "2026-10")[30]).toBe(3000);
+  });
+  it("sem a marca de reembolso, a entrada continua a ser receita", () => {
+    const plain = r.map((t) => ({ ...t, refund: false }));
+    expect(monthlyFlow(plain).at(-1)).toMatchObject({ incomeCents: 203000, spentCents: 6000 });
+  });
+});
+
 describe("goalPlan", () => {
   it("calcula quanto falta por mês até à data", () => {
     const p = goalPlan({ targetCents: 150000, savedCents: 45000, targetMonth: "2027-06" }, "2026-11");

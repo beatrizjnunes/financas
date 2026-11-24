@@ -4,7 +4,7 @@ import { cleanRevolutDescription, revolutParser } from "@/server/import/parsers/
 import { detectParser } from "@/server/import/parsers";
 import { caixaParser } from "@/server/import/parsers/caixa";
 import { ingParser } from "@/server/import/parsers/ing";
-import { suggestCategoryName, suggestScope } from "@/server/import/classify";
+import { isRefundRow, suggestCategoryName, suggestScope } from "@/server/import/classify";
 
 // Exportação da Revolut em português (pt-pt), anonimizada.
 const csv = readFileSync(new URL("./fixtures/revolut-pt.csv", import.meta.url), "utf8");
@@ -72,8 +72,16 @@ describe("Revolut em português: descrições e classificação", () => {
     expect(suggestScope(by("Transferência imediata intrabancária para PESSOA IVO"), bea)).toBe("entre_nos");
     expect(suggestScope(by("Carregamento com Apple Pay"), bea)).toBe("interna");
   });
-  it("dinheiro para investir não é despesa", () => {
-    expect(suggestScope(by("Transferência imediata SEPA+ para Go And Grow"), bea)).toBe("interna");
+  it("dinheiro para investir vai para a categoria Investimentos (não é despesa)", () => {
+    const r = by("Transferência imediata SEPA+ para Go And Grow");
+    expect(suggestScope(r, bea)).toBe("pessoal");
+    expect(suggestCategoryName(r, "pessoal")).toBe("Investimentos");
+  });
+  it("devoluções da loja ficam na categoria da loja e marcadas como reembolso", () => {
+    const refund = rows.find((r) => r.bankType === "Card Refund")!;
+    expect(isRefundRow(refund)).toBe(true);
+    expect(suggestCategoryName(refund, "pessoal")).toBe("Compras online");
+    expect(isRefundRow(by("Carregamento de EMPRESA"))).toBe(false);
   });
   it("categorias", () => {
     expect(suggestCategoryName(by("Transferência a crédito SEPA+ para NS Reizigers"), "pessoal")).toBe("Transportes");
